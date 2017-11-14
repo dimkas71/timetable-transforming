@@ -21,13 +21,18 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 public final class WorkbookUtils {
 
+    public static final String FIO_SEARCH_TEXT = "Фамилия И. О.";
     public static final String TABLE_NUMBER_SEARCH_TEXT = "Таб. №";
+    public static final String CURRENT_POSITION_SEARCH_TEXT = "Должность";
 
     public static final String NO_VALUE = "";
+
+    private static final int ROW_NUM_NO_VALUE = -1;
 
     public static List<ImmutableCell> from(Path source) {
 
@@ -86,59 +91,51 @@ public final class WorkbookUtils {
 
     public static void merge(Path to, Path... filesFrom) {
 
+        //TODO: fix problem at defining the
 
         try (XSSFWorkbook workbook = new XSSFWorkbook()) {
 
             XSSFSheet currentSheet = workbook.createSheet("timetable");
 
             int currentRow = 0;
+            boolean isHeaderOutputed = false;
+
+            /*
+                1. first of all the header from the first path should be outputed
+                2. then it ouputs all the rows from the rowHeader + 1
+            */
 
             for (Path path : filesFrom) {
                 List<ImmutableCell> content = from(path);
 
-                int tableNumberColumn = content.stream()
+                int from = content.stream()
                         .filter(c -> c.getValue().contains(TABLE_NUMBER_SEARCH_TEXT))
                         .map(c -> c.getRow())
                         .findFirst()
-                        .orElse(-1);
+                        .orElse(ROW_NUM_NO_VALUE);
 
-                if (tableNumberColumn != -1) {
+                if (from == ROW_NUM_NO_VALUE) {
+                    //TODO: log this case
+                    continue;
+                } else {
+                    //Main handler is at this point....
+                    if (!isHeaderOutputed) {
+                        List<ImmutableCell> headerCells = content.stream()
+                                .filter(c -> c.getRow() == from)
+                                .collect(Collectors.toList());
 
-                    int maxRow = content.stream()
-                            .map(c -> c.getRow())
-                            .max((r1, r2) -> (r1 > r2) ? 1 : (r1 < r2) ? -1 : 0)
-                            .orElse(-1);
+                        writeTo(currentSheet, headerCells);
 
-                    final int from = content.stream()
-                            .filter(c -> Utils.matches(c.getValue()) && (c.getColumn() == tableNumberColumn))
-                            .map(c -> c.getRow())
-                            .findFirst()
-                            .orElse(-1);
+                        isHeaderOutputed = true;
+                    }
 
-                    final int currentRow1 = currentRow;
-                    content.stream()
-                            .filter(c -> c.getRow() >= from)
-                            .forEach(c -> {
+                    List<ImmutableCell> otherCells = content.stream()
+                            .filter(c -> c.getRow() > from)
+                            .collect(Collectors.toList());
 
-                                int rowNum = currentRow1 + c.getRow();
-
-                                XSSFRow row = currentSheet.getRow(rowNum);
-                                if (row == null) {
-                                    row = currentSheet.createRow(rowNum);
-                                }
-
-                                XSSFCell cell = row.getCell(c.getColumn());
-                                if (cell == null) {
-                                    cell = row.createCell(c.getColumn(), CellType.STRING);
-                                }
-
-                                cell.setCellValue(c.getValue());
-                            });
-
-                    currentRow += maxRow + 1;
+                    writeTo(currentSheet, otherCells);
 
                 }
-
             }
 
             try (FileOutputStream fos = new FileOutputStream(to.toFile())) {
@@ -151,11 +148,32 @@ public final class WorkbookUtils {
 
         }
 
+    }
 
+    private static void writeTo(XSSFSheet currentSheet, List<ImmutableCell> otherCells) {
 
+        Objects.requireNonNull(currentSheet);
+        Objects.requireNonNull(otherCells);
 
+        int nextRow = currentSheet.getLastRowNum() + 1;
 
+        otherCells.stream()
+                .forEach(currentCell -> {
 
+                    int rowNum = nextRow + currentCell.getRow();
+
+                    XSSFRow row = currentSheet.getRow(rowNum);
+                    if (row == null) {
+                        row = currentSheet.createRow(rowNum);
+                    }
+
+                    XSSFCell cell = row.getCell(currentCell.getColumn());
+                    if (cell == null) {
+                        cell = row.createCell(currentCell.getColumn(), CellType.STRING);
+                    }
+
+                    cell.setCellValue(currentCell.getValue());
+                });
     }
 }
 
