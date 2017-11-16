@@ -9,6 +9,8 @@ import org.apache.poi.xssf.usermodel.XSSFCell;
 import org.apache.poi.xssf.usermodel.XSSFRow;
 import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import ua.compservice.model.ImmutableCell;
 import ua.compservice.model.ImmutableRow;
 
@@ -26,13 +28,17 @@ import java.util.stream.Collectors;
 
 public final class WorkbookUtils {
 
+    private static final int ROW_NUM_NO_VALUE = -1;
+
+    private static final Logger logger = LoggerFactory.getLogger(WorkbookUtils.class);
+
+
     public static final String FIO_SEARCH_TEXT = "Фамилия И. О.";
     public static final String TABLE_NUMBER_SEARCH_TEXT = "Таб. №";
     public static final String CURRENT_POSITION_SEARCH_TEXT = "Должность";
 
     public static final String NO_VALUE = "";
 
-    private static final int ROW_NUM_NO_VALUE = -1;
 
     public static List<ImmutableCell> from(Path source) {
 
@@ -80,8 +86,10 @@ public final class WorkbookUtils {
 
             }
         } catch (IOException e) {
+            logger.error("{}", e);
             e.printStackTrace();
         } catch (InvalidFormatException e) {
+            logger.error("{}", e);
             e.printStackTrace();
         }
 
@@ -91,7 +99,6 @@ public final class WorkbookUtils {
 
     public static void merge(Path to, Path... filesFrom) {
 
-        //TODO: fix problem at defining the
 
         try (XSSFWorkbook workbook = new XSSFWorkbook()) {
 
@@ -115,7 +122,7 @@ public final class WorkbookUtils {
                         .orElse(ROW_NUM_NO_VALUE);
 
                 if (from == ROW_NUM_NO_VALUE) {
-                    //TODO: log this case
+                    logger.debug("In the file {} a header with text {} doesn't found", path.toFile().getAbsolutePath(), TABLE_NUMBER_SEARCH_TEXT);
                     continue;
                 } else {
                     //Main handler is at this point....
@@ -124,7 +131,7 @@ public final class WorkbookUtils {
                                 .filter(c -> c.getRow() == from)
                                 .collect(Collectors.toList());
 
-                        writeTo(currentSheet, headerCells);
+                        writeTo(currentSheet, headerCells, from + 1);
 
                         isHeaderOutputed = true;
                     }
@@ -133,7 +140,7 @@ public final class WorkbookUtils {
                             .filter(c -> c.getRow() > from)
                             .collect(Collectors.toList());
 
-                    writeTo(currentSheet, otherCells);
+                    writeTo(currentSheet, otherCells, from + 1);
 
                 }
             }
@@ -145,17 +152,17 @@ public final class WorkbookUtils {
             workbook.close();
 
         } catch (IOException e) {
-
+            logger.error("Exception has been raised {}", e);
         }
 
     }
 
-    private static void writeTo(XSSFSheet currentSheet, List<ImmutableCell> otherCells) {
+    private static void writeTo(XSSFSheet currentSheet, List<ImmutableCell> otherCells, int shiftFrom) {
 
         Objects.requireNonNull(currentSheet);
         Objects.requireNonNull(otherCells);
 
-        int nextRow = currentSheet.getLastRowNum() + 1;
+        int nextRow = currentSheet.getLastRowNum() + 1 - shiftFrom;
 
         otherCells.stream()
                 .forEach(currentCell -> {
