@@ -28,6 +28,8 @@ import java.util.stream.Collectors;
 
 public final class WorkbookUtils {
 
+    //TODO: add tests for this class with help Mockito extenstions for JUNIT 5
+
     private static final int ROW_NUM_NO_VALUE = -1;
 
     private static final Logger logger = LoggerFactory.getLogger(WorkbookUtils.class);
