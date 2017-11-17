@@ -28,7 +28,7 @@ public class TimeTableExcelApplication {
                 .desc("Merge files")
                 .longOpt("merge")
                 .type(String[].class)
-                .optionalArg(false)
+                .optionalArg(true)
                 .build();
 
         Option helpOption = Option.builder("h")
