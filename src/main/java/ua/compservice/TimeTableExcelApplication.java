@@ -7,7 +7,6 @@ import ua.compservice.util.WorkbookUtils;
 
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Arrays;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -54,7 +53,7 @@ public class TimeTableExcelApplication {
 
         CommandLineParser parser = new DefaultParser();
 
-        String[] testArgs = {"-m", "11.xlsx", "46.xlsx", "-o", "out.xlsx"};
+        String[] testArgs = {"-m", "11.xlsx","12.xlsx","13.xlsx","21.xlsx","22.xlsx","23.xlsx","31.xlsx","32.xlsx","33.xlsx","41.xlsx","42.xlsx","43.xlsx","44.xlsx","45.xlsx","46.xlsx","47.xlsx","49.xlsx","50.xlsx", "-o", "out.xlsx"};
 
 
         try {
