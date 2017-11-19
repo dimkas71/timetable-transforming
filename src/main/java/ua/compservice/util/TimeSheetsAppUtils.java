@@ -4,7 +4,6 @@ import org.apache.poi.openxml4j.exceptions.InvalidFormatException;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellType;
 import org.apache.poi.ss.usermodel.Row;
-import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.xssf.usermodel.XSSFCell;
 import org.apache.poi.xssf.usermodel.XSSFRow;
 import org.apache.poi.xssf.usermodel.XSSFSheet;
@@ -12,34 +11,42 @@ import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import ua.compservice.model.ImmutableCell;
-import ua.compservice.model.ImmutableRow;
 
-import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-public final class WorkbookUtils {
+public final class TimeSheetsAppUtils {
 
-    //TODO: add tests for this class with help Mockito extenstions for JUNIT 5
+    //Logging support
+    private static final Logger logger = LoggerFactory.getLogger(TimeSheetsAppUtils.class);
 
-    private static final int ROW_NUM_NO_VALUE = -1;
-
-    private static final Logger logger = LoggerFactory.getLogger(WorkbookUtils.class);
-
+    //region Constants
+    public static final int NO_VALUE = -1;
 
     public static final String FIO_SEARCH_TEXT = "Фамилия И. О.";
-    public static final String TABLE_NUMBER_SEARCH_TEXT = "Таб. №";
+    public static final String PERSONNEL_NUMBER_SEARCH_TEXT = "Таб. №";
     public static final String CURRENT_POSITION_SEARCH_TEXT = "Должность";
 
-    public static final String NO_VALUE = "";
+    public static final String EMPTY_STRING = "";
+
+    public static final String TIME_REGEX_EXPRESSION
+            = "(?<hours>\\d{1})\\/(?<workshift>\\d{1})\\((?<hoursminutes>\\d{1}:\\d{2})\\)";
+
+    public static final String DIGIT_FIND_REGEX_EXPRESSION = "\\d{1,}";
+    //endregion
+
+    //region Patterns
+    private static final Pattern DIGIT_FOUNDER_PATTERN = Pattern.compile(DIGIT_FIND_REGEX_EXPRESSION);
+    private static final Pattern TIME_FOUNDER_PATTERN = Pattern.compile(TIME_REGEX_EXPRESSION);
+    //endregion
 
 
     public static List<ImmutableCell> from(Path source) {
@@ -70,7 +77,7 @@ public final class WorkbookUtils {
                         } else if (cellType == CellType.STRING) {
                             aValue = currentCell.getStringCellValue();
                         } else {
-                            aValue = NO_VALUE;
+                            aValue = EMPTY_STRING;
                         }
 
 
@@ -118,13 +125,13 @@ public final class WorkbookUtils {
                 List<ImmutableCell> content = from(path);
 
                 int from = content.stream()
-                        .filter(c -> c.getValue().contains(TABLE_NUMBER_SEARCH_TEXT))
+                        .filter(c -> c.getValue().contains(PERSONNEL_NUMBER_SEARCH_TEXT))
                         .map(c -> c.getRow())
                         .findFirst()
-                        .orElse(ROW_NUM_NO_VALUE);
+                        .orElse(NO_VALUE);
 
-                if (from == ROW_NUM_NO_VALUE) {
-                    logger.debug("In the file {} a header with text {} doesn't found", path.toFile().getAbsolutePath(), TABLE_NUMBER_SEARCH_TEXT);
+                if (from == NO_VALUE) {
+                    logger.debug("In the file {} a header with text {} doesn't found", path.toFile().getAbsolutePath(), PERSONNEL_NUMBER_SEARCH_TEXT);
                     continue;
                 } else {
                     //Main handler is at this point....
@@ -159,6 +166,79 @@ public final class WorkbookUtils {
 
     }
 
+    public static boolean hasDigit(String aString) {
+        if (aString == null || aString.isEmpty())
+            return false;
+        else
+            return DIGIT_FOUNDER_PATTERN.matcher(aString).find();
+    }
+
+    public static boolean matches(String aPersonnelNumber) {
+
+        final String regex = "\\d{2}\\/\\d{4}$";
+
+        Pattern pattern = Pattern.compile(regex);
+
+        Matcher matcher = pattern.matcher(aPersonnelNumber);
+
+        return matcher.find();
+
+
+    }
+
+    public static int toWorkingHours(String aString) {
+
+        final float SECONDS_IN_MINUTE = 60.0f;
+        final double PRESISION = 0.5;
+
+        int hoursForWorkShift = 0;
+        int minutesForWorkShift = 0;
+
+        Matcher m = TIME_FOUNDER_PATTERN.matcher(aString);
+
+        while (m.find()) {
+
+            try {
+                String hm = m.group("hoursminutes");
+
+                hoursForWorkShift = Integer.parseInt(hm.split(":")[0]);
+                minutesForWorkShift = Integer.parseInt(hm.split(":")[1]);
+
+            } catch (NumberFormatException e) {
+                //TODO:LOG this situation somehow
+            } catch (IllegalStateException e) {
+                //TODO:Log this situation somehow
+            }
+
+
+        }
+
+        float part = minutesForWorkShift / SECONDS_IN_MINUTE;
+
+        return hoursForWorkShift + (part < PRESISION ? 0 : 1);
+
+    }
+
+    public static int toWorkShift(String from) {
+
+        int workShift = 1;
+
+        Matcher m = TIME_FOUNDER_PATTERN.matcher(from);
+
+        while (m.find()) {
+
+            try {
+                workShift = Integer.parseInt(m.group("workshift"));
+            } catch (NumberFormatException e) {
+
+            } catch (IllegalStateException e) {
+            }
+        }
+
+        return workShift;
+
+    }
+
     private static void writeTo(XSSFSheet currentSheet, List<ImmutableCell> otherCells, int shiftFrom) {
 
         Objects.requireNonNull(currentSheet);
@@ -183,6 +263,46 @@ public final class WorkbookUtils {
 
                     cell.setCellValue(currentCell.getValue());
                 });
+    }
+
+    public static List<ImmutableCell> extractHeader(List<ImmutableCell> allCells) {
+
+        //TODO: write test for this function with using Mockito framework
+
+        int headerRow = allCells.stream()
+                .filter(c -> c.getValue().contains(PERSONNEL_NUMBER_SEARCH_TEXT))
+                .map(c -> c.getRow())
+                .findFirst()
+                .orElse(NO_VALUE);
+
+
+        return allCells.stream()
+                .filter(c -> c.getRow() == headerRow)
+                .collect(Collectors.toList());
+
+    }
+
+    public static List<ImmutableCell> extractLeftExceptOf(List<ImmutableCell> cells, List<ImmutableCell> header) {
+
+        int headerRow = header.stream()
+                .mapToInt(c -> c.getRow())
+                .findFirst()
+                .orElse(NO_VALUE);
+
+        int firstDayColumn = header.stream()
+                .filter(c -> TimeSheetsAppUtils.hasDigit(c.getValue()))
+                .mapToInt(c -> c.getColumn())
+                .sorted()
+                .findFirst()
+                .orElse(-1);
+
+
+        return cells.stream()
+                .filter(c -> (c.getRow() > headerRow) && (c.getColumn() < firstDayColumn))
+                .collect(Collectors.toList());
+
+
+
     }
 }
 
