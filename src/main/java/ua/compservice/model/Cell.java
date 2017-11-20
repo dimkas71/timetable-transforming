@@ -6,7 +6,7 @@ import lombok.Value;
 
 @Value
 @AllArgsConstructor
-public class ImmutableCell {
+public class Cell {
 
     private final @NonNull int row;
     private final @NonNull int column;

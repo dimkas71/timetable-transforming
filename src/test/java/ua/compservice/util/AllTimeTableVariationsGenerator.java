@@ -1,6 +1,6 @@
 package ua.compservice.util;
 
-import ua.compservice.model.ImmutableCell;
+import ua.compservice.model.Cell;
 
 import java.io.*;
 import java.nio.file.Files;
@@ -64,7 +64,7 @@ public class AllTimeTableVariationsGenerator {
 
     }
 
-    private static List<ImmutableCell> onlyForTimeTable(List<ImmutableCell> cells) {
+    private static List<Cell> onlyForTimeTable(List<Cell> cells) {
 
         int headerPosition = cells.stream()
                 .filter(c -> c.getValue().contains(TimeSheetsAppUtils.PERSONNEL_NUMBER_SEARCH_TEXT))
@@ -73,7 +73,7 @@ public class AllTimeTableVariationsGenerator {
                 .orElse(-1);
 
 
-        List<ImmutableCell> headerCells = cells.stream()
+        List<Cell> headerCells = cells.stream()
                 .filter(c -> c.getRow() == headerPosition)
                 .collect(Collectors.toList());
 

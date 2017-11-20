@@ -1,7 +1,7 @@
 package ua.compservice.util;
 
 import org.apache.poi.openxml4j.exceptions.InvalidFormatException;
-import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.formula.functions.Rows;
 import org.apache.poi.ss.usermodel.CellType;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.xssf.usermodel.XSSFCell;
@@ -10,10 +10,11 @@ import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import ua.compservice.model.ImmutableCell;
+import ua.compservice.model.Cell;
 
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -49,9 +50,9 @@ public final class TimeSheetsAppUtils {
     //endregion
 
 
-    public static List<ImmutableCell> from(Path source) {
+    public static List<Cell> from(Path source) {
 
-        List<ImmutableCell> content = new ArrayList<>();
+        List<Cell> content = new ArrayList<>();
 
         try {
             try(XSSFWorkbook workbook = new XSSFWorkbook(source.toFile())) {
@@ -64,10 +65,10 @@ public final class TimeSheetsAppUtils {
                 while (rowIterator.hasNext()) {
                     Row currentRow = rowIterator.next();
 
-                    Iterator<Cell> cellIterator = currentRow.cellIterator();
+                    Iterator<org.apache.poi.ss.usermodel.Cell> cellIterator = currentRow.cellIterator();
 
                     while (cellIterator.hasNext()) {
-                        Cell currentCell = cellIterator.next();
+                        org.apache.poi.ss.usermodel.Cell currentCell = cellIterator.next();
 
                         String aValue = "";
 
@@ -82,7 +83,7 @@ public final class TimeSheetsAppUtils {
 
 
                         content.add(
-                                new ImmutableCell(
+                                new Cell(
                                         currentRow.getRowNum(),
                                         currentCell.getColumnIndex(),
                                         aValue
@@ -122,7 +123,7 @@ public final class TimeSheetsAppUtils {
             */
 
             for (Path path : filesFrom) {
-                List<ImmutableCell> content = from(path);
+                List<Cell> content = from(path);
 
                 int from = content.stream()
                         .filter(c -> c.getValue().contains(PERSONNEL_NUMBER_SEARCH_TEXT))
@@ -136,7 +137,7 @@ public final class TimeSheetsAppUtils {
                 } else {
                     //Main handler is at this point....
                     if (!isHeaderOutputed) {
-                        List<ImmutableCell> headerCells = content.stream()
+                        List<Cell> headerCells = content.stream()
                                 .filter(c -> c.getRow() == from)
                                 .collect(Collectors.toList());
 
@@ -145,7 +146,7 @@ public final class TimeSheetsAppUtils {
                         isHeaderOutputed = true;
                     }
 
-                    List<ImmutableCell> otherCells = content.stream()
+                    List<Cell> otherCells = content.stream()
                             .filter(c -> c.getRow() > from)
                             .collect(Collectors.toList());
 
@@ -239,7 +240,7 @@ public final class TimeSheetsAppUtils {
 
     }
 
-    private static void writeTo(XSSFSheet currentSheet, List<ImmutableCell> otherCells, int shiftFrom) {
+    private static void writeTo(XSSFSheet currentSheet, List<Cell> otherCells, int shiftFrom) {
 
         Objects.requireNonNull(currentSheet);
         Objects.requireNonNull(otherCells);
@@ -265,7 +266,7 @@ public final class TimeSheetsAppUtils {
                 });
     }
 
-    public static List<ImmutableCell> extractHeader(List<ImmutableCell> allCells) {
+    public static List<Cell> extractHeader(List<Cell> allCells) {
 
         //TODO: write test for this function with using Mockito framework
 
@@ -282,7 +283,7 @@ public final class TimeSheetsAppUtils {
 
     }
 
-    public static List<ImmutableCell> extractLeftExceptOf(List<ImmutableCell> cells, List<ImmutableCell> header) {
+    public static List<Cell> extractLeftExceptOf(List<Cell> cells, List<Cell> header) {
 
         int headerRow = header.stream()
                 .mapToInt(c -> c.getRow())
@@ -304,6 +305,34 @@ public final class TimeSheetsAppUtils {
 
 
     }
+
+    public static void save(Path to, List<Cell> all, String sheetName) {
+
+        try (XSSFWorkbook workbook = new XSSFWorkbook()) {
+
+            XSSFSheet sheet = workbook.createSheet(sheetName);
+
+            all.stream()
+                    .forEach(c -> {
+                        XSSFRow row = sheet.getRow(c.getRow());
+
+                        if (row == null) {
+                            row = sheet.createRow(c.getRow());
+                        }
+                        XSSFCell cell = row.createCell(c.getColumn());
+                        cell.setCellValue(c.getValue());
+                    });
+
+            FileOutputStream fos = new FileOutputStream(to.toFile());
+            workbook.write(fos);
+            fos.close();
+        } catch (IOException e) {
+            logger.error("{}", e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+
 }
 
 

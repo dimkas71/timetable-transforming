@@ -3,13 +3,14 @@ package ua.compservice;
 import org.apache.commons.cli.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import ua.compservice.model.ImmutableCell;
+import ua.compservice.model.Cell;
 import ua.compservice.util.TimeSheetsAppUtils;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Arrays;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -132,39 +133,42 @@ public class TimeSheetsApp {
                     throw new TimeSheetsException(message);
                 }
 
-                List<ImmutableCell> cells = TimeSheetsAppUtils.from(source);
+                List<Cell> cells = TimeSheetsAppUtils.from(source);
 
-                List<ImmutableCell> header = TimeSheetsAppUtils.extractHeader(cells);
+                List<Cell> header = TimeSheetsAppUtils.extractHeader(cells);
 
-                List<ImmutableCell> left = TimeSheetsAppUtils.extractLeftExceptOf(cells, header);
+                List<Cell> left = TimeSheetsAppUtils.extractLeftExceptOf(cells, header);
 
 
                 //all others should be converted into time sheet cells
 
-                List<ImmutableCell> others = cells.stream()
+                List<Cell> others = cells.stream()
                         .filter(c -> !header.contains(c) && !left.contains(c))
                         .map(c -> {
 
                             String value = c.getValue();
                             if (value.isEmpty())
-                                return new ImmutableCell(c.getRow(), c.getColumn(), value);
+                                return new Cell(c.getRow(), c.getColumn(), value);
 
                             String[] values = value.split("\n");
 
                             int hours = 0;
 
                             for (String v : values) {
-                                hours += TimeSheetsAppUtils.toWorkingHours(v);
+                                hours += TimeSheetsAppUtils.toWorkingHours(v.trim());
                             }
 
-                            return new ImmutableCell(c.getRow(), c.getColumn(), String.valueOf(hours));
+                            return new Cell(c.getRow(), c.getColumn(), String.valueOf(hours));
 
                         })
                         .collect(Collectors.toList());
 
                 //TODO: combine header, left and others to one collection and write it to the sheet with name "sheetname"
+                List<Cell> all = Stream.of(header, left, others)
+                        .flatMap(l -> l.stream())
+                        .collect(Collectors.toList());
 
-
+                TimeSheetsAppUtils.save(currentDir.resolve("out2.xlsx"), all, sheetName);
 
             } else {
                 HelpFormatter formatter = new HelpFormatter();
