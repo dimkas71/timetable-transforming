@@ -21,7 +21,7 @@ public class TimeSheetsApp {
     private static final Logger logger = LoggerFactory.getLogger(TimeSheetsApp.class);
 
     //region Constants
-    private static final String PROGRAM_NAME = "time-sheet-transformer";
+    private static final String PROGRAM_NAME = "time-sheet-transformer [options] [option arguments]";
     private static final String HOME_DIR = System.getProperty("user.dir").toString();
     private static final String SUBFOLDER = "src/files";
     public static final String DEFAULT_OUTPUT_FILE_NAME = "common.xlsx";
