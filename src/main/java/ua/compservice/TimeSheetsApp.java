@@ -73,10 +73,17 @@ public class TimeSheetsApp {
                 .optionalArg(true)
                 .build();
 
-        Option checkOption = Option.builder("ch")
+        Option checkDoublesOption = Option.builder("cd")
                 .hasArg(false)
-                .longOpt("check")
+                .longOpt("check-doubles")
                 .desc("check uniqueness personnel number")
+                .optionalArg(true)
+                .build();
+
+        Option checkPersonnelNumberOption = Option.builder("cp")
+                .hasArg(false)
+                .longOpt("check-personnal-numbers")
+                .desc("check personnal numbers for correctness")
                 .optionalArg(true)
                 .build();
 
@@ -89,14 +96,17 @@ public class TimeSheetsApp {
         options.addOption(inputFileBuilder);
 
         options.addOption(sheetNameOption);
-        options.addOption(checkOption);
+        options.addOption(checkDoublesOption);
+        options.addOption(checkPersonnelNumberOption);
 
         CommandLineParser parser = new DefaultParser();
 
         //String[] testArgs = {"-m", "11.xlsx","12.xlsx","13.xlsx","21.xlsx","22.xlsx","23.xlsx","31.xlsx","32.xlsx","33.xlsx","41.xlsx","42.xlsx","43.xlsx","44.xlsx","45.xlsx","46.xlsx","47.xlsx","49.xlsx","50.xlsx", "-o", "out.xlsx"};
 
         //String[] testArgs = {"-f", "out.xlsx", "-sn", "timesheet"};
-        String[] testArgs = {"-f", "out2.xlsx", "-ch"};
+        //String[] testArgs = {"-f", "out2.xlsx", "-cd"};
+
+        String[] testArgs = {"-f", "out2.xlsx", "-cp"};
 
 
 
@@ -179,7 +189,7 @@ public class TimeSheetsApp {
 
                 TimeSheetsAppUtils.save(currentDir.resolve("out2.xlsx"), all, sheetName);
 
-            } else if (commandLine.hasOption("f") && commandLine.hasOption("ch")) {
+            } else if (commandLine.hasOption("f") && commandLine.hasOption("cd")) {
                 Path currentDir = Paths.get(HOME_DIR).resolve(SUBFOLDER);
                 Path file = currentDir.resolve(commandLine.getOptionValue("f", DEFAULT_OUTPUT_FILE_NAME));
 
@@ -212,7 +222,32 @@ public class TimeSheetsApp {
                 }
 
 
+            } else if (commandLine.hasOption("f") && commandLine.hasOption("cp")) {
+                Path currentDir = Paths.get(HOME_DIR).resolve(SUBFOLDER);
+                Path file = currentDir.resolve(commandLine.getOptionValue("f", DEFAULT_OUTPUT_FILE_NAME));
+
+                if (!Files.exists(file)) {
+                    logger.error("file {} doesn't exist", file);
+                } else {
+
+                    List<Cell> cells = TimeSheetsAppUtils.from(file);
+
+                    int personnelColumn = cells.stream()
+                            .filter(c -> c.getValue().contains(TimeSheetsAppUtils.PERSONNEL_NUMBER_SEARCH_TEXT))
+                            .map(c -> c.getColumn())
+                            .findFirst()
+                            .orElse(TimeSheetsAppUtils.NO_VALUE);
+
+                    cells.stream()
+                            .filter(c -> (c.getColumn() == personnelColumn) && !c.getValue().isEmpty())
+                            .filter(c -> !TimeSheetsAppUtils.matches(c.getValue()))
+                            .forEach(c -> {
+                                logger.info("Row: {}, the personal number {} isn't correct", c.getRow() + 1, c.getValue());
+                            });
+                }
+
             } else {
+                //Print help information
                 HelpFormatter formatter = new HelpFormatter();
 
                 formatter.printHelp(PROGRAM_NAME, options, false);
