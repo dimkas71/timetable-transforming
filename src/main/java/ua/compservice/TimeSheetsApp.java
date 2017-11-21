@@ -12,6 +12,7 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -72,6 +73,13 @@ public class TimeSheetsApp {
                 .optionalArg(true)
                 .build();
 
+        Option checkOption = Option.builder("ch")
+                .hasArg(false)
+                .longOpt("check")
+                .desc("check uniqueness personnel number")
+                .optionalArg(true)
+                .build();
+
 
         Options options = new Options();
 
@@ -81,12 +89,14 @@ public class TimeSheetsApp {
         options.addOption(inputFileBuilder);
 
         options.addOption(sheetNameOption);
+        options.addOption(checkOption);
 
         CommandLineParser parser = new DefaultParser();
 
         //String[] testArgs = {"-m", "11.xlsx","12.xlsx","13.xlsx","21.xlsx","22.xlsx","23.xlsx","31.xlsx","32.xlsx","33.xlsx","41.xlsx","42.xlsx","43.xlsx","44.xlsx","45.xlsx","46.xlsx","47.xlsx","49.xlsx","50.xlsx", "-o", "out.xlsx"};
 
-        String[] testArgs = {"-f", "out.xlsx", "-sn", "timesheet"};
+        //String[] testArgs = {"-f", "out.xlsx", "-sn", "timesheet"};
+        String[] testArgs = {"-f", "out2.xlsx", "-ch"};
 
 
 
@@ -118,7 +128,7 @@ public class TimeSheetsApp {
 
 
             } else if (commandLine.hasOption("f") && commandLine.hasOption("sn")) {
-                //TODO: create timesheet
+
                 Path currentDir = Paths.get(HOME_DIR).resolve(SUBFOLDER);
 
                 Path source = currentDir.resolve(commandLine.getOptionValue("f", DEFAULT_OUTPUT_FILE_NAME));
@@ -163,12 +173,44 @@ public class TimeSheetsApp {
                         })
                         .collect(Collectors.toList());
 
-                //TODO: combine header, left and others to one collection and write it to the sheet with name "sheetname"
                 List<Cell> all = Stream.of(header, left, others)
                         .flatMap(l -> l.stream())
                         .collect(Collectors.toList());
 
                 TimeSheetsAppUtils.save(currentDir.resolve("out2.xlsx"), all, sheetName);
+
+            } else if (commandLine.hasOption("f") && commandLine.hasOption("ch")) {
+                Path currentDir = Paths.get(HOME_DIR).resolve(SUBFOLDER);
+                Path file = currentDir.resolve(commandLine.getOptionValue("f", DEFAULT_OUTPUT_FILE_NAME));
+
+                if (!Files.exists(file)) {
+                    logger.error("file {} doesn't exist", file);
+                } else {
+
+                    List<Cell> cells = TimeSheetsAppUtils.from(file);
+
+                    int personnelColumn = cells.stream()
+                            .filter(c -> c.getValue().contains(TimeSheetsAppUtils.PERSONNEL_NUMBER_SEARCH_TEXT))
+                            .map(c -> c.getColumn())
+                            .findFirst()
+                            .orElse(TimeSheetsAppUtils.NO_VALUE);
+
+                    Map<String, List<Cell>> aMap = cells.stream()
+                            .filter(c -> (c.getColumn() == personnelColumn) && !c.getValue().isEmpty())
+                            .collect(Collectors.groupingBy(Cell::getValue));
+
+                    for (Map.Entry<String, List<Cell>> entry : aMap.entrySet()) {
+                        if (entry.getValue().size() > 1) {
+                            //Log it...
+                            logger.info("For the PN {} there are rows with doubled values. List rows -> {}", entry.getKey(), entry.getValue().stream().map(c -> c.getRow() + 1).collect(Collectors.toList()));
+                        }
+
+                    }
+
+
+
+                }
+
 
             } else {
                 HelpFormatter formatter = new HelpFormatter();
