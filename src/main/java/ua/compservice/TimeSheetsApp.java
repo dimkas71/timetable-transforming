@@ -239,7 +239,7 @@ public class TimeSheetsApp {
                             .orElse(TimeSheetsAppUtils.NO_VALUE);
 
                     cells.stream()
-                            .filter(c -> (c.getColumn() == personnelColumn) && !c.getValue().isEmpty())
+                            .filter(c -> (c.getColumn() == personnelColumn) && !c.getValue().isEmpty() && !c.getValue().contains(TimeSheetsAppUtils.PERSONNEL_NUMBER_SEARCH_TEXT))
                             .filter(c -> !TimeSheetsAppUtils.matches(c.getValue()))
                             .forEach(c -> {
                                 logger.info("Row: {}, the personal number {} isn't correct", c.getRow() + 1, c.getValue());
