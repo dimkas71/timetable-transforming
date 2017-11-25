@@ -306,11 +306,13 @@ public final class TimeSheetsAppUtils {
 
     }
 
-    public static void save(Path to, List<Cell> all, String sheetName) {
+    public static void save(Path to, List<Cell> all) {
 
         try (XSSFWorkbook workbook = new XSSFWorkbook()) {
 
-            XSSFSheet sheet = workbook.createSheet(sheetName);
+            final String timesheet = "timesheet";
+
+            XSSFSheet sheet = workbook.createSheet(timesheet);
 
             all.stream()
                     .forEach(c -> {
@@ -332,6 +334,22 @@ public final class TimeSheetsAppUtils {
         }
     }
 
+
+    public static Cell newCell(Cell c) {
+        String value = c.getValue();
+        if (value.isEmpty())
+            return new Cell(c.getRow(), c.getColumn(), value);
+
+        String[] values = value.split("\n");
+
+        int hours = 0;
+
+        for (String v : values) {
+            hours += TimeSheetsAppUtils.toWorkingHours(v.trim());
+        }
+
+        return new Cell(c.getRow(), c.getColumn(), String.valueOf(hours));
+    }
 
 }
 

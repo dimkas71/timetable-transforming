@@ -4,6 +4,7 @@ import com.beust.jcommander.JCommander;
 import org.apache.commons.cli.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import ua.compservice.config.CreateTimesheetCommand;
 import ua.compservice.config.MergeCommand;
 import ua.compservice.model.Cell;
 import ua.compservice.util.TimeSheetsAppUtils;
@@ -37,19 +38,22 @@ public class TimeSheetsApp {
 
 
         MergeCommand mergeCommand = new MergeCommand();
+        CreateTimesheetCommand createTimesheetCommand = new CreateTimesheetCommand();
 
         JCommander commander = JCommander.newBuilder()
                 .addObject(app)
                 .addCommand(mergeCommand)
+                .addCommand(createTimesheetCommand)
                 .args(args)
                 .build();
 
         //handler of merge command
         String parsedCommand = commander.getParsedCommand();
 
+        //Merge command
         if ("merge".equals(parsedCommand)) {
 
-            logger.info("Merge command {}", mergeCommand);
+            logger.debug("Merge command {}", mergeCommand);
 
             Path homeDir = Paths.get(HOME_DIR);
 
@@ -63,6 +67,42 @@ public class TimeSheetsApp {
             Path to = homeDir.resolve(Paths.get(mergeCommand.getOutput()));
             TimeSheetsAppUtils.merge(to, files);
 
+        } else if ("create-timesheet".equals(parsedCommand)) {
+
+            logger.debug("Create-timesheet command {} " + createTimesheetCommand);
+
+            Path homeDir = Paths.get(HOME_DIR);
+
+            Path source = homeDir.resolve(createTimesheetCommand.getFile());
+
+            if (!Files.exists(source)) {
+
+                String message = "Creating timesheet: File " + source + " doesn't exist";
+                logger.error("{}", message);
+                throw new TimeSheetsException(message);
+            }
+
+            List<Cell> cells = TimeSheetsAppUtils.from(source);
+
+            List<Cell> header = TimeSheetsAppUtils.extractHeader(cells);
+
+            List<Cell> left = TimeSheetsAppUtils.extractLeftExceptOf(cells, header);
+
+
+            //all others should be converted into time sheet cells
+
+            List<Cell> others = cells.stream()
+                    .filter(c -> !header.contains(c) && !left.contains(c))
+                    .map(TimeSheetsAppUtils::newCell)
+                    .collect(Collectors.toList());
+
+            List<Cell> all = Stream.of(header, left, others)
+                    .flatMap(l -> l.stream())
+                    .collect(Collectors.toList());
+
+            Path to = homeDir.resolve(createTimesheetCommand.getOutput());
+
+            TimeSheetsAppUtils.save(to, all);
         }
 
         System.exit(0);
@@ -138,59 +178,7 @@ public class TimeSheetsApp {
 
         try {
             CommandLine commandLine = parser.parse(options, testArgs);
-             if (commandLine.hasOption("f") && commandLine.hasOption("sn")) {
-
-                Path currentDir = Paths.get(HOME_DIR).resolve(SUBFOLDER);
-
-                Path source = currentDir.resolve(commandLine.getOptionValue("f", DEFAULT_OUTPUT_FILE_NAME));
-
-                String sheetName = commandLine.getOptionValue("sh", DEFAULT_SHEET_NAME);
-
-
-                if (!Files.exists(source)) {
-
-                    String message = "Creating timesheet: File " + source + " doesn't exist";
-                    logger.error("{}", message);
-                    throw new TimeSheetsException(message);
-                }
-
-                List<Cell> cells = TimeSheetsAppUtils.from(source);
-
-                List<Cell> header = TimeSheetsAppUtils.extractHeader(cells);
-
-                List<Cell> left = TimeSheetsAppUtils.extractLeftExceptOf(cells, header);
-
-
-                //all others should be converted into time sheet cells
-
-                List<Cell> others = cells.stream()
-                        .filter(c -> !header.contains(c) && !left.contains(c))
-                        .map(c -> {
-
-                            String value = c.getValue();
-                            if (value.isEmpty())
-                                return new Cell(c.getRow(), c.getColumn(), value);
-
-                            String[] values = value.split("\n");
-
-                            int hours = 0;
-
-                            for (String v : values) {
-                                hours += TimeSheetsAppUtils.toWorkingHours(v.trim());
-                            }
-
-                            return new Cell(c.getRow(), c.getColumn(), String.valueOf(hours));
-
-                        })
-                        .collect(Collectors.toList());
-
-                List<Cell> all = Stream.of(header, left, others)
-                        .flatMap(l -> l.stream())
-                        .collect(Collectors.toList());
-
-                TimeSheetsAppUtils.save(currentDir.resolve("out2.xlsx"), all, sheetName);
-
-            } else if (commandLine.hasOption("f") && commandLine.hasOption("cd")) {
+            if (commandLine.hasOption("f") && commandLine.hasOption("cd")) {
                 Path currentDir = Paths.get(HOME_DIR).resolve(SUBFOLDER);
                 Path file = currentDir.resolve(commandLine.getOptionValue("f", DEFAULT_OUTPUT_FILE_NAME));
 
@@ -217,9 +205,6 @@ public class TimeSheetsApp {
                         }
 
                     }
-
-
-
                 }
 
 
@@ -267,4 +252,6 @@ public class TimeSheetsApp {
 
 
     }
+
+
 }
