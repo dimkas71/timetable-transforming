@@ -33,7 +33,6 @@ public class TimeSheetsApp {
 
         TimeSheetsApp app = new TimeSheetsApp();
 
-
         MergeCommand mergeCommand = new MergeCommand();
         CreateTimesheetCommand createTimesheetCommand = new CreateTimesheetCommand();
         CheckDoublesCommand checkDoublesCommand = new CheckDoublesCommand();
@@ -58,6 +57,7 @@ public class TimeSheetsApp {
         //Merge
         if ("merge".equals(parsedCommand)) {
 
+            //region merge
             logger.debug("Merge command {}", mergeCommand);
 
             Path homeDir = Paths.get(HOME_DIR);
@@ -71,10 +71,11 @@ public class TimeSheetsApp {
 
             Path to = homeDir.resolve(Paths.get(mergeCommand.getOutput()));
             TimeSheetsAppUtils.merge(to, files);
+            //endregion
 
-        //Create-timesheet
         } else if ("create-timesheet".equals(parsedCommand)) {
 
+            //region Create-timesheet
             logger.debug("Create-timesheet command {} " + createTimesheetCommand);
 
             Path homeDir = Paths.get(HOME_DIR);
@@ -109,10 +110,10 @@ public class TimeSheetsApp {
             Path to = homeDir.resolve(createTimesheetCommand.getOutput());
 
             TimeSheetsAppUtils.save(to, all);
-
-        //Check-doubles
+            //endregion
 
         } else if ("check-doubles".equals(parsedCommand)) {
+            //region Check-doubles
             logger.debug("check-doubles command {} " + createTimesheetCommand);
 
             Path currentDir = Paths.get(HOME_DIR);
@@ -154,11 +155,11 @@ public class TimeSheetsApp {
                                                         personnalNumber, rows));
                         });
             }
-
-        //Check-personnel-number
+            //endregion
 
         } else if ("check-personnel-number".equals(parsedCommand)) {
 
+            //region Check-personnel-number
             logger.debug("check-personal-number command {} " + checkPersonnelNumberCommand);
 
             Path homeDir = Paths.get(HOME_DIR);
@@ -190,8 +191,10 @@ public class TimeSheetsApp {
                             System.out.println(String.format("Row: %d, the personal number %s isn't correct", row, personnelNumber));
                         });
             }
+            //endregion
         } else if ("create-norm-hours".equals(parsedCommand)) {
 
+            //region Create-norm-hours
             logger.debug("Create-norm-hours command {} " + createNormHoursCommand);
 
             Path homeDir = Paths.get(HOME_DIR);
@@ -216,28 +219,59 @@ public class TimeSheetsApp {
 
             final int firstColumn = cells.stream()
                     .filter(c -> c.getRow() == rowHeader && TimeSheetsAppUtils.hasDigit(c.getValue()))
-                    .mapToInt(c -> c.getRow())
+                    .mapToInt(c -> c.getColumn())
+                    .sorted()
                     .findFirst()
                     .orElse(TimeSheetsAppUtils.NO_VALUE);
 
 
-            Map<Integer, List<Integer>> collected = cells.stream()
+            System.out.println(firstColumn);
+
+            Map<Integer, Map<Integer, Integer>> collectedNormHours = cells.stream()
                     .filter(c -> c.getRow() > rowHeader && c.getColumn() >= firstColumn && !c.getValue().isEmpty())
                     .collect(Collectors.groupingBy(
                             Cell::getRow,
-                            Collectors.mapping(
+                            Collectors.groupingBy(
                                     c -> TimeSheetsAppUtils.toWorkShift(c.getValue()),
-                                    Collectors.toList())));
+                                    Collectors.mapping(
+                                            c -> TimeSheetsAppUtils.toWorkingHours(c.getValue()),
+                                            Collectors.summingInt(i -> i)))));
 
 
-            collected.entrySet()
-                    .stream()
-                    .forEach(System.out::println);
+            List<Cell> header = TimeSheetsAppUtils.createNewHeader(cells);
 
-            //Path to = homeDir.resolve(createTimesheetCommand.getOutput());
+            logger.debug("Header {}", header);
 
-            //TimeSheetsAppUtils.save(to, all);
+            Path to = homeDir.resolve(createNormHoursCommand.getOutput());
 
+            logger.debug("Path to {} ", to.toString());
+
+            List<Cell> left = TimeSheetsAppUtils.extractLeftExceptOf(cells, header);
+
+
+            logger.debug("Left part {}", left);
+
+            //TODO: rewrite the code below using stream api style...
+            List<Cell> hours = new ArrayList<>();
+
+
+            for (Map.Entry<Integer, Map<Integer, Integer>> outerEntry : collectedNormHours.entrySet()) {
+                int row = outerEntry.getKey();
+
+                for (Map.Entry<Integer, Integer> innerEntry : outerEntry.getValue().entrySet()) {
+                    int shift = innerEntry.getKey();
+                    int shiftHours = innerEntry.getValue();
+
+                    hours.add(
+                            new Cell(row, firstColumn + shift - 1, String.valueOf(shiftHours))
+                    );
+                }
+            }
+
+            logger.debug("Hours cells {} ", hours);
+
+            TimeSheetsAppUtils.save(to, Stream.of(header, left, hours).flatMap(l -> l.stream()).collect(Collectors.toList()));
+            //endregion
 
 
         } else if ("help".equals(parsedCommand)) {
