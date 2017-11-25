@@ -1,13 +1,9 @@
 package ua.compservice;
 
 import com.beust.jcommander.JCommander;
-import org.apache.commons.cli.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import ua.compservice.config.CheckDoublesCommand;
-import ua.compservice.config.CheckPersonnelNumberCommand;
-import ua.compservice.config.CreateTimesheetCommand;
-import ua.compservice.config.MergeCommand;
+import ua.compservice.config.*;
 import ua.compservice.model.Cell;
 import ua.compservice.util.TimeSheetsAppUtils;
 
@@ -15,7 +11,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -43,6 +38,8 @@ public class TimeSheetsApp {
         CreateTimesheetCommand createTimesheetCommand = new CreateTimesheetCommand();
         CheckDoublesCommand checkDoublesCommand = new CheckDoublesCommand();
         CheckPersonnelNumberCommand checkPersonnelNumberCommand = new CheckPersonnelNumberCommand();
+        CreateNormHoursCommand createNormHoursCommand = new CreateNormHoursCommand();
+        HelpCommand helpCommand = new HelpCommand();
 
         JCommander commander = JCommander.newBuilder()
                 .addObject(app)
@@ -50,13 +47,15 @@ public class TimeSheetsApp {
                 .addCommand(createTimesheetCommand)
                 .addCommand(checkDoublesCommand)
                 .addCommand(checkPersonnelNumberCommand)
+                .addCommand(createNormHoursCommand)
+                .addCommand(helpCommand)
                 .args(args)
                 .build();
 
         //handler of merge command
         String parsedCommand = commander.getParsedCommand();
 
-        //Merge command
+        //Merge
         if ("merge".equals(parsedCommand)) {
 
             logger.debug("Merge command {}", mergeCommand);
@@ -73,7 +72,7 @@ public class TimeSheetsApp {
             Path to = homeDir.resolve(Paths.get(mergeCommand.getOutput()));
             TimeSheetsAppUtils.merge(to, files);
 
-         //Create-timesheet
+        //Create-timesheet
         } else if ("create-timesheet".equals(parsedCommand)) {
 
             logger.debug("Create-timesheet command {} " + createTimesheetCommand);
@@ -110,7 +109,9 @@ public class TimeSheetsApp {
             Path to = homeDir.resolve(createTimesheetCommand.getOutput());
 
             TimeSheetsAppUtils.save(to, all);
+
         //Check-doubles
+
         } else if ("check-doubles".equals(parsedCommand)) {
             logger.debug("check-doubles command {} " + createTimesheetCommand);
 
@@ -189,9 +190,61 @@ public class TimeSheetsApp {
                             System.out.println(String.format("Row: %d, the personal number %s isn't correct", row, personnelNumber));
                         });
             }
+        } else if ("create-norm-hours".equals(parsedCommand)) {
+
+            logger.debug("Create-norm-hours command {} " + createNormHoursCommand);
+
+            Path homeDir = Paths.get(HOME_DIR);
+
+            Path file = homeDir.resolve(createNormHoursCommand.getFile());
+
+            if (!Files.exists(file)) {
+
+                String message = "Creating norm-hours command: File " + file + " doesn't exist";
+                logger.error("{}", message);
+                throw new TimeSheetsException(message);
+            }
+
+            List<Cell> cells = TimeSheetsAppUtils.from(file);
+
+
+            final int rowHeader = cells.stream()
+                    .filter(c -> c.getValue().contains(TimeSheetsAppUtils.PERSONNEL_NUMBER_SEARCH_TEXT))
+                    .mapToInt(c -> c.getRow())
+                    .findFirst()
+                    .orElse(TimeSheetsAppUtils.NO_VALUE);
+
+            final int firstColumn = cells.stream()
+                    .filter(c -> c.getRow() == rowHeader && TimeSheetsAppUtils.hasDigit(c.getValue()))
+                    .mapToInt(c -> c.getRow())
+                    .findFirst()
+                    .orElse(TimeSheetsAppUtils.NO_VALUE);
+
+
+            Map<Integer, List<Integer>> collected = cells.stream()
+                    .filter(c -> c.getRow() > rowHeader && c.getColumn() >= firstColumn && !c.getValue().isEmpty())
+                    .collect(Collectors.groupingBy(
+                            Cell::getRow,
+                            Collectors.mapping(
+                                    c -> TimeSheetsAppUtils.toWorkShift(c.getValue()),
+                                    Collectors.toList())));
+
+
+            collected.entrySet()
+                    .stream()
+                    .forEach(System.out::println);
+
+            //Path to = homeDir.resolve(createTimesheetCommand.getOutput());
+
+            //TimeSheetsAppUtils.save(to, all);
+
+
+
+        } else if ("help".equals(parsedCommand)) {
+            commander.usage();
+        } else {
+            commander.usage();
         }
-
-
     }
 
 

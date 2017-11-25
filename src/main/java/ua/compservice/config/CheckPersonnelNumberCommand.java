@@ -8,7 +8,7 @@ import lombok.Data;
 @Parameters(commandNames = {"check-personnel-number"}, commandDescription = "Check if a personnel number matches a pattern '00/1001'")
 public class CheckPersonnelNumberCommand {
 
-    @Parameter(description = "input files")
+    @Parameter(description = "file")
     private String file;
 
 }

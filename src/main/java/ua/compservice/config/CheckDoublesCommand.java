@@ -8,7 +8,7 @@ import lombok.Data;
 @Parameters(commandNames = {"check-doubles"}, commandDescription = "Check personal number doubles")
 public class CheckDoublesCommand {
 
-    @Parameter(description = "file to check")
+    @Parameter(description = "file")
     private String file;
 
 }

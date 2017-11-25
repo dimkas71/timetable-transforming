@@ -1,7 +1,6 @@
 package ua.compservice.util;
 
 import org.apache.poi.openxml4j.exceptions.InvalidFormatException;
-import org.apache.poi.ss.formula.functions.Rows;
 import org.apache.poi.ss.usermodel.CellType;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.xssf.usermodel.XSSFCell;
@@ -14,15 +13,12 @@ import ua.compservice.model.Cell;
 
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Objects;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public final class TimeSheetsAppUtils {
 
@@ -295,7 +291,7 @@ public final class TimeSheetsAppUtils {
                 .mapToInt(c -> c.getColumn())
                 .sorted()
                 .findFirst()
-                .orElse(-1);
+                .orElse(NO_VALUE);
 
 
         return cells.stream()
@@ -334,7 +330,6 @@ public final class TimeSheetsAppUtils {
         }
     }
 
-
     public static Cell newCell(Cell c) {
         String value = c.getValue();
         if (value.isEmpty())
@@ -351,6 +346,43 @@ public final class TimeSheetsAppUtils {
         return new Cell(c.getRow(), c.getColumn(), String.valueOf(hours));
     }
 
+    public static List<Cell> createNewHeader(List<Cell> cells) {
+
+        final String shiftOneString = "Нормо години 1 зміна";
+        final String shiftTwoString = "Нормо години 2 зміна";
+        final String shiftThreeString = "Нормо години 3 зміна";
+
+        int headerRow = cells.stream()
+                .filter(c -> c.getValue().contains(PERSONNEL_NUMBER_SEARCH_TEXT))
+                .map(c -> c.getRow())
+                .findFirst()
+                .orElse(NO_VALUE);
+
+
+        int firstDayColumn = cells.stream()
+                .filter(c -> TimeSheetsAppUtils.hasDigit(c.getValue()) && c.getRow() == headerRow)
+                .mapToInt(c -> c.getColumn())
+                .sorted()
+                .findFirst()
+                .orElse(NO_VALUE);
+
+        List<Cell> withoutDates = cells.stream()
+                .filter(c -> c.getRow() == headerRow && c.getColumn() < firstDayColumn)
+                .collect(Collectors.toList());
+
+
+        List<Cell> withShifts = Arrays.asList(
+                new Cell(headerRow, firstDayColumn, shiftOneString),
+                new Cell(headerRow, firstDayColumn + 1, shiftTwoString),
+                new Cell(headerRow, firstDayColumn + 2, shiftThreeString)
+        );
+
+        //union header
+
+        return Stream.of(withoutDates, withShifts)
+                .flatMap(list -> list.stream())
+                .collect(Collectors.toList());
+    }
 }
 
 

@@ -8,7 +8,7 @@ import lombok.Data;
 @Parameters(commandNames = {"create-timesheet"}, commandDescription = "create timesheet from a file")
 public class CreateTimesheetCommand {
 
-    @Parameter(description = "a file", required = true)
+    @Parameter(description = "file", required = true)
     private String file;
 
     @Parameter(names = {"-o", "--output"}, description = "output file", required = true)
