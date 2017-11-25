@@ -1,8 +1,10 @@
 package ua.compservice;
 
+import com.beust.jcommander.JCommander;
 import org.apache.commons.cli.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import ua.compservice.config.MergeCommand;
 import ua.compservice.model.Cell;
 import ua.compservice.util.TimeSheetsAppUtils;
 
@@ -30,14 +32,40 @@ public class TimeSheetsApp {
 
     public static void main(String[] args) {
 
-        Option mergeOption = Option.builder("m")
-                .hasArgs()
-                .argName("files")
-                .desc("Merge files")
-                .longOpt("merge")
-                .type(String[].class)
-                .optionalArg(true)
+
+        TimeSheetsApp app = new TimeSheetsApp();
+
+
+        MergeCommand mergeCommand = new MergeCommand();
+
+        JCommander commander = JCommander.newBuilder()
+                .addObject(app)
+                .addCommand(mergeCommand)
+                .args(args)
                 .build();
+
+        //handler of merge command
+        String parsedCommand = commander.getParsedCommand();
+
+        if ("merge".equals(parsedCommand)) {
+
+            logger.info("Merge command {}", mergeCommand);
+
+            Path homeDir = Paths.get(HOME_DIR);
+
+
+            Path[] files = mergeCommand.getFiles()
+                    .stream()
+                    .map(s -> homeDir.resolve(Paths.get(s)))
+                    .collect(Collectors.toList())
+                    .toArray(new Path[0]);
+
+            Path to = homeDir.resolve(Paths.get(mergeCommand.getOutput()));
+            TimeSheetsAppUtils.merge(to, files);
+
+        }
+
+        System.exit(0);
 
         Option helpOption = Option.builder("h")
                 .desc("print help usage")
@@ -90,7 +118,6 @@ public class TimeSheetsApp {
 
         Options options = new Options();
 
-        options.addOption(mergeOption);
         options.addOption(helpOption);
         options.addOption(outputFileOption);
         options.addOption(inputFileBuilder);
@@ -101,7 +128,6 @@ public class TimeSheetsApp {
 
         CommandLineParser parser = new DefaultParser();
 
-        //String[] testArgs = {"-m", "11.xlsx","12.xlsx","13.xlsx","21.xlsx","22.xlsx","23.xlsx","31.xlsx","32.xlsx","33.xlsx","41.xlsx","42.xlsx","43.xlsx","44.xlsx","45.xlsx","46.xlsx","47.xlsx","49.xlsx","50.xlsx", "-o", "out.xlsx"};
 
         //String[] testArgs = {"-f", "out.xlsx", "-sn", "timesheet"};
         //String[] testArgs = {"-f", "out2.xlsx", "-cd"};
@@ -112,32 +138,7 @@ public class TimeSheetsApp {
 
         try {
             CommandLine commandLine = parser.parse(options, testArgs);
-            if (commandLine.hasOption("m")) {
-
-                String[] files = commandLine.getOptionValues("m");
-                logger.info("merge the list of [{}] files", files);
-
-                final Path currentDir = Paths.get(HOME_DIR).resolve(SUBFOLDER);
-
-                Path[] paths = Stream.of(files)
-                        .map(f -> currentDir.resolve(Paths.get(f)))
-                        .collect(Collectors.toList())
-                        .toArray(new Path[0]);
-
-                logger.info("List of paths {}", paths);
-
-                Path to = currentDir.resolve(Paths.get(DEFAULT_OUTPUT_FILE_NAME));
-
-                if (commandLine.hasOption("o")) {
-                    String output = commandLine.getOptionValue("o", DEFAULT_OUTPUT_FILE_NAME);
-                    to = currentDir.resolve(Paths.get(output));
-                }
-
-
-                TimeSheetsAppUtils.merge(to, paths);
-
-
-            } else if (commandLine.hasOption("f") && commandLine.hasOption("sn")) {
+             if (commandLine.hasOption("f") && commandLine.hasOption("sn")) {
 
                 Path currentDir = Paths.get(HOME_DIR).resolve(SUBFOLDER);
 
