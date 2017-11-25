@@ -5,6 +5,7 @@ import org.apache.commons.cli.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import ua.compservice.config.CheckDoublesCommand;
+import ua.compservice.config.CheckPersonnelNumberCommand;
 import ua.compservice.config.CreateTimesheetCommand;
 import ua.compservice.config.MergeCommand;
 import ua.compservice.model.Cell;
@@ -41,12 +42,14 @@ public class TimeSheetsApp {
         MergeCommand mergeCommand = new MergeCommand();
         CreateTimesheetCommand createTimesheetCommand = new CreateTimesheetCommand();
         CheckDoublesCommand checkDoublesCommand = new CheckDoublesCommand();
+        CheckPersonnelNumberCommand checkPersonnelNumberCommand = new CheckPersonnelNumberCommand();
 
         JCommander commander = JCommander.newBuilder()
                 .addObject(app)
                 .addCommand(mergeCommand)
                 .addCommand(createTimesheetCommand)
                 .addCommand(checkDoublesCommand)
+                .addCommand(checkPersonnelNumberCommand)
                 .args(args)
                 .build();
 
@@ -70,6 +73,7 @@ public class TimeSheetsApp {
             Path to = homeDir.resolve(Paths.get(mergeCommand.getOutput()));
             TimeSheetsAppUtils.merge(to, files);
 
+         //Create-timesheet
         } else if ("create-timesheet".equals(parsedCommand)) {
 
             logger.debug("Create-timesheet command {} " + createTimesheetCommand);
@@ -106,10 +110,11 @@ public class TimeSheetsApp {
             Path to = homeDir.resolve(createTimesheetCommand.getOutput());
 
             TimeSheetsAppUtils.save(to, all);
+        //Check-doubles
         } else if ("check-doubles".equals(parsedCommand)) {
+            logger.debug("check-doubles command {} " + createTimesheetCommand);
+
             Path currentDir = Paths.get(HOME_DIR);
-
-
             Path file = currentDir.resolve(checkDoublesCommand.getFile());
 
             if (!Files.exists(file)) {
@@ -148,125 +153,43 @@ public class TimeSheetsApp {
                                                         personnalNumber, rows));
                         });
             }
-        }
 
-        System.exit(0);
+        //Check-personnel-number
 
-        Option helpOption = Option.builder("h")
-                .desc("print help usage")
-                .longOpt("help")
-                .hasArg(false)
-                .optionalArg(true)
-                .build();
+        } else if ("check-personnel-number".equals(parsedCommand)) {
 
-        Option outputFileOption = Option.builder("o")
-                .hasArg(true)
-                .longOpt("output")
-                .desc("output file name")
-                .type(String.class)
-                .argName("file")
-                .optionalArg(true)
-                .build();
+            logger.debug("check-personal-number command {} " + checkPersonnelNumberCommand);
 
-        Option inputFileBuilder = Option.builder("f")
-                .hasArg(true)
-                .longOpt("file")
-                .desc("input file")
-                .type(String.class)
-                .argName("inputFile")
-                .optionalArg(true)
-                .build();
+            Path homeDir = Paths.get(HOME_DIR);
 
-        Option sheetNameOption = Option.builder("sn")
-                .hasArg(true)
-                .longOpt("sheet-name")
-                .desc("sheet name")
-                .type(String.class)
-                .argName("sheet-name")
-                .optionalArg(true)
-                .build();
+            Path file = homeDir.resolve(checkPersonnelNumberCommand.getFile());
 
-        Option checkDoublesOption = Option.builder("cd")
-                .hasArg(false)
-                .longOpt("check-doubles")
-                .desc("check uniqueness personnel number")
-                .optionalArg(true)
-                .build();
-
-        Option checkPersonnelNumberOption = Option.builder("cp")
-                .hasArg(false)
-                .longOpt("check-personnal-numbers")
-                .desc("check personnal numbers for correctness")
-                .optionalArg(true)
-                .build();
-
-
-        Options options = new Options();
-
-        options.addOption(helpOption);
-        options.addOption(outputFileOption);
-        options.addOption(inputFileBuilder);
-
-        options.addOption(sheetNameOption);
-        options.addOption(checkDoublesOption);
-        options.addOption(checkPersonnelNumberOption);
-
-        CommandLineParser parser = new DefaultParser();
-
-
-        //String[] testArgs = {"-f", "out2.xlsx", "-cd"};
-
-        String[] testArgs = {"-f", "out2.xlsx", "-cp"};
-
-
-
-        try {
-            CommandLine commandLine = parser.parse(options, testArgs);
-            if (commandLine.hasOption("f") && commandLine.hasOption("cd")) {
-
-
-
-            } else if (commandLine.hasOption("f") && commandLine.hasOption("cp")) {
-                Path currentDir = Paths.get(HOME_DIR).resolve(SUBFOLDER);
-                Path file = currentDir.resolve(commandLine.getOptionValue("f", DEFAULT_OUTPUT_FILE_NAME));
-
-                if (!Files.exists(file)) {
-                    logger.error("file {} doesn't exist", file);
-                } else {
-
-                    List<Cell> cells = TimeSheetsAppUtils.from(file);
-
-                    int personnelColumn = cells.stream()
-                            .filter(c -> c.getValue().contains(TimeSheetsAppUtils.PERSONNEL_NUMBER_SEARCH_TEXT))
-                            .map(c -> c.getColumn())
-                            .findFirst()
-                            .orElse(TimeSheetsAppUtils.NO_VALUE);
-
-                    cells.stream()
-                            .filter(c -> (c.getColumn() == personnelColumn) && !c.getValue().isEmpty() && !c.getValue().contains(TimeSheetsAppUtils.PERSONNEL_NUMBER_SEARCH_TEXT))
-                            .filter(c -> !TimeSheetsAppUtils.matches(c.getValue()))
-                            .forEach(c -> {
-                                logger.info("Row: {}, the personal number {} isn't correct", c.getRow() + 1, c.getValue());
-                            });
-                }
+            if (!Files.exists(file)) {
+                String message = String.format("File %s doesn't exist", file.toString());
+                logger.error("{}", message);
+                throw  new TimeSheetsException(message);
 
             } else {
-                //Print help information
-                HelpFormatter formatter = new HelpFormatter();
 
-                formatter.printHelp(PROGRAM_NAME, options, false);
+                List<Cell> cells = TimeSheetsAppUtils.from(file);
+
+                int personnelColumn = cells.stream()
+                        .filter(c -> c.getValue().contains(TimeSheetsAppUtils.PERSONNEL_NUMBER_SEARCH_TEXT))
+                        .map(c -> c.getColumn())
+                        .findFirst()
+                        .orElse(TimeSheetsAppUtils.NO_VALUE);
+
+                cells.stream()
+                        .filter(c -> (c.getColumn() == personnelColumn) && !c.getValue().isEmpty() && !c.getValue().contains(TimeSheetsAppUtils.PERSONNEL_NUMBER_SEARCH_TEXT))
+                        .filter(c -> !TimeSheetsAppUtils.matches(c.getValue()))
+                        .forEach(c -> {
+                            int row = c.getRow() + 1;
+                            final String personnelNumber = c.getValue();
+                            logger.info("Row: {}, the personal number {} isn't correct", row, personnelNumber);
+                            System.out.println(String.format("Row: %d, the personal number %s isn't correct", row, personnelNumber));
+                        });
             }
-
-        } catch (UnrecognizedOptionException e) {
-            logger.error("{}", e.getMessage());
-            e.printStackTrace();
-        } catch (ParseException e) {
-            logger.error("{}", e.getMessage());
-            e.printStackTrace();
         }
-
-
-
 
 
     }
