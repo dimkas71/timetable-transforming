@@ -4,6 +4,7 @@ import com.beust.jcommander.JCommander;
 import org.apache.commons.cli.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import ua.compservice.config.CheckDoublesCommand;
 import ua.compservice.config.CreateTimesheetCommand;
 import ua.compservice.config.MergeCommand;
 import ua.compservice.model.Cell;
@@ -39,11 +40,13 @@ public class TimeSheetsApp {
 
         MergeCommand mergeCommand = new MergeCommand();
         CreateTimesheetCommand createTimesheetCommand = new CreateTimesheetCommand();
+        CheckDoublesCommand checkDoublesCommand = new CheckDoublesCommand();
 
         JCommander commander = JCommander.newBuilder()
                 .addObject(app)
                 .addCommand(mergeCommand)
                 .addCommand(createTimesheetCommand)
+                .addCommand(checkDoublesCommand)
                 .args(args)
                 .build();
 
@@ -103,6 +106,48 @@ public class TimeSheetsApp {
             Path to = homeDir.resolve(createTimesheetCommand.getOutput());
 
             TimeSheetsAppUtils.save(to, all);
+        } else if ("check-doubles".equals(parsedCommand)) {
+            Path currentDir = Paths.get(HOME_DIR);
+
+
+            Path file = currentDir.resolve(checkDoublesCommand.getFile());
+
+            if (!Files.exists(file)) {
+                String message = String.format("File %s doesn't exist", file.toString());
+                logger.error("{}", message);
+                throw  new TimeSheetsException(message);
+            } else {
+
+                List<Cell> cells = TimeSheetsAppUtils.from(file);
+
+                int personnelColumn = cells.stream()
+                        .filter(c -> c.getValue().contains(TimeSheetsAppUtils.PERSONNEL_NUMBER_SEARCH_TEXT))
+                        .map(c -> c.getColumn())
+                        .findFirst()
+                        .orElse(TimeSheetsAppUtils.NO_VALUE);
+
+                Map<String, List<Cell>> doubles = cells.stream()
+                        .filter(c -> (c.getColumn() == personnelColumn) && !c.getValue().isEmpty())
+                        .collect(Collectors.groupingBy(Cell::getValue));
+
+
+                doubles.entrySet()
+                        .stream()
+                        .filter(e -> e.getValue().size() > 1)
+                        .forEach(e -> {
+
+                            final List<Integer> rows = e.getValue().stream()
+                                    .map(c -> c.getRow() + 1)
+                                    .collect(Collectors.toList());
+
+                            final String personnalNumber = e.getKey();
+                            logger.debug("For the PN {} there are rows with doubled values. List rows -> {}",
+                                    personnalNumber, rows);
+
+                            System.out.println(String.format("For the PN %s there are rows with doubled values. List rows -> %s",
+                                                        personnalNumber, rows));
+                        });
+            }
         }
 
         System.exit(0);
@@ -169,7 +214,6 @@ public class TimeSheetsApp {
         CommandLineParser parser = new DefaultParser();
 
 
-        //String[] testArgs = {"-f", "out.xlsx", "-sn", "timesheet"};
         //String[] testArgs = {"-f", "out2.xlsx", "-cd"};
 
         String[] testArgs = {"-f", "out2.xlsx", "-cp"};
@@ -179,33 +223,7 @@ public class TimeSheetsApp {
         try {
             CommandLine commandLine = parser.parse(options, testArgs);
             if (commandLine.hasOption("f") && commandLine.hasOption("cd")) {
-                Path currentDir = Paths.get(HOME_DIR).resolve(SUBFOLDER);
-                Path file = currentDir.resolve(commandLine.getOptionValue("f", DEFAULT_OUTPUT_FILE_NAME));
 
-                if (!Files.exists(file)) {
-                    logger.error("file {} doesn't exist", file);
-                } else {
-
-                    List<Cell> cells = TimeSheetsAppUtils.from(file);
-
-                    int personnelColumn = cells.stream()
-                            .filter(c -> c.getValue().contains(TimeSheetsAppUtils.PERSONNEL_NUMBER_SEARCH_TEXT))
-                            .map(c -> c.getColumn())
-                            .findFirst()
-                            .orElse(TimeSheetsAppUtils.NO_VALUE);
-
-                    Map<String, List<Cell>> aMap = cells.stream()
-                            .filter(c -> (c.getColumn() == personnelColumn) && !c.getValue().isEmpty())
-                            .collect(Collectors.groupingBy(Cell::getValue));
-
-                    for (Map.Entry<String, List<Cell>> entry : aMap.entrySet()) {
-                        if (entry.getValue().size() > 1) {
-                            //Log it...
-                            logger.info("For the PN {} there are rows with doubled values. List rows -> {}", entry.getKey(), entry.getValue().stream().map(c -> c.getRow() + 1).collect(Collectors.toList()));
-                        }
-
-                    }
-                }
 
 
             } else if (commandLine.hasOption("f") && commandLine.hasOption("cp")) {
