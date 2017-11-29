@@ -2,12 +2,16 @@ package ua.compservice.util;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.CsvFileSource;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
+import ua.compservice.model.Cell;
 
+import java.util.Arrays;
+import java.util.List;
 import java.util.stream.Stream;
 
 
@@ -64,6 +68,37 @@ class TimeSheetsAppUtilsTest {
                     Arguments.of("d0/0084", false),
                     Arguments.of("100084", false)
                 );
+    }
+
+    @DisplayName("Find a header from a collection of cells")
+    @ParameterizedTest
+    @MethodSource({"cellsProvider"})
+    void testFindHeader(List<Cell> cells) {
+        int actual = TimeSheetsAppUtils.findHeader(cells);
+        Assertions.assertEquals(3, actual, () -> "Should be equal to 3 at this time");
+    }
+
+    @DisplayName("If a header from a collection of cells not found should NO_VALUE returned")
+    @Test
+    void testHeaderNotFound() {
+        int actual = TimeSheetsAppUtils.findHeader(Arrays.asList(
+                new Cell(1, 1, "Some text here")
+        ));
+
+        Assertions.assertEquals(TimeSheetsAppUtils.NO_VALUE, actual, () -> "Should be returned NO_VALUE(-1)");
+    }
+
+    static Stream<List<Cell>> cellsProvider() {
+        return Stream.of(Arrays.asList(
+
+                new Cell(3, 0, "Фамилия И. О.       "),
+                new Cell(3, 1, "Таб. №    "),
+                new Cell(3, 2, "Должность"),
+                new Cell(5, 0, "1 бригада  "),
+                new Cell(24, 0, "Фамилия И. О.       "),
+                new Cell(24, 1, "Таб. №    "),
+                new Cell(24, 2, "Должность")
+                ));
     }
 
 }

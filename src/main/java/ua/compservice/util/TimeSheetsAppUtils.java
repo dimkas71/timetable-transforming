@@ -9,11 +9,14 @@ import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import ua.compservice.TimeSheetsException;
 import ua.compservice.model.Cell;
 
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.sql.Time;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -46,7 +49,14 @@ public final class TimeSheetsAppUtils {
     //endregion
 
 
-    public static List<Cell> from(Path source) {
+    public static List<Cell> from(Path source, final int rowShift) {
+
+        if (!Files.exists(source)) {
+            String message = String.format("File %s doesn't exist", source.toString());
+            logger.error("{}", message);
+            throw new TimeSheetsException(message);
+        }
+
 
         List<Cell> content = new ArrayList<>();
 
@@ -80,7 +90,7 @@ public final class TimeSheetsAppUtils {
 
                         content.add(
                                 new Cell(
-                                        currentRow.getRowNum(),
+                                        currentRow.getRowNum() + rowShift,
                                         currentCell.getColumnIndex(),
                                         aValue
                                 )
@@ -103,6 +113,23 @@ public final class TimeSheetsAppUtils {
 
     }
 
+    public static List<Cell> from(Path... sources) {
+        List<Cell> collected = new ArrayList<>();
+
+        Arrays.stream(sources)
+                .forEach(p -> {
+                    //
+                    int lastRow = collected.stream()
+                        .map(Cell::getRow)
+                        .sorted(Comparator.reverseOrder())
+                        .findFirst()
+                        .orElse(0);
+
+                    collected.addAll(from(p, lastRow));
+                });
+        return collected;
+    }
+
     public static void merge(Path to, Path... filesFrom) {
 
 
@@ -121,11 +148,7 @@ public final class TimeSheetsAppUtils {
             for (Path path : filesFrom) {
                 List<Cell> content = from(path);
 
-                int from = content.stream()
-                        .filter(c -> c.getValue().contains(PERSONNEL_NUMBER_SEARCH_TEXT))
-                        .map(c -> c.getRow())
-                        .findFirst()
-                        .orElse(NO_VALUE);
+                int from = findHeader(content);
 
                 if (from == NO_VALUE) {
                     logger.debug("In the file {} a header with text {} doesn't found", path.toFile().getAbsolutePath(), PERSONNEL_NUMBER_SEARCH_TEXT);
@@ -154,8 +177,6 @@ public final class TimeSheetsAppUtils {
             try (FileOutputStream fos = new FileOutputStream(to.toFile())) {
                 workbook.write(fos);
             }
-
-            workbook.close();
 
         } catch (IOException e) {
             logger.error("Exception has been raised {}", e);
@@ -186,7 +207,7 @@ public final class TimeSheetsAppUtils {
     public static int toWorkingHours(String aString) {
 
         final float SECONDS_IN_MINUTE = 60.0f;
-        final double PRESISION = 0.5;
+        final double PRECISION = 0.5;
 
         int hoursForWorkShift = 0;
         int minutesForWorkShift = 0;
@@ -202,17 +223,16 @@ public final class TimeSheetsAppUtils {
                 minutesForWorkShift = Integer.parseInt(hm.split(":")[1]);
 
             } catch (NumberFormatException e) {
-                //TODO:LOG this situation somehow
+                logger.error("For cell's value {} Integer.parseInt() throws NumberFormatException  {} ", aString, e.getMessage());
+
             } catch (IllegalStateException e) {
-                //TODO:Log this situation somehow
+                logger.error("For cell's value {} Integer.parseInt() throws IllegalStateException {} ", aString, e.getMessage());
             }
-
-
         }
 
         float part = minutesForWorkShift / SECONDS_IN_MINUTE;
 
-        return hoursForWorkShift + (part < PRESISION ? 0 : 1);
+        return hoursForWorkShift + (part < PRECISION ? 0 : 1);
 
     }
 
@@ -227,8 +247,9 @@ public final class TimeSheetsAppUtils {
             try {
                 workShift = Integer.parseInt(m.group("workshift"));
             } catch (NumberFormatException e) {
-
+                logger.error("Working shift parsing error for cell's value {} Integer.parseInt() throws NumberFormatException  {} ", from, e.getMessage());
             } catch (IllegalStateException e) {
+                logger.error("Working shift parsing error for cell's value {} Integer.parseInt() throws IllegalStateException  {} ", from, e.getMessage());
             }
         }
 
@@ -266,11 +287,7 @@ public final class TimeSheetsAppUtils {
 
         //TODO: write test for this function with using Mockito framework
 
-        int headerRow = allCells.stream()
-                .filter(c -> c.getValue().contains(PERSONNEL_NUMBER_SEARCH_TEXT))
-                .map(c -> c.getRow())
-                .findFirst()
-                .orElse(NO_VALUE);
+        int headerRow = findHeader(allCells);
 
 
         return allCells.stream()
@@ -281,18 +298,9 @@ public final class TimeSheetsAppUtils {
 
     public static List<Cell> extractLeftExceptOf(List<Cell> cells, List<Cell> header) {
 
-        int headerRow = header.stream()
-                .mapToInt(c -> c.getRow())
-                .findFirst()
-                .orElse(NO_VALUE);
+        int headerRow = findHeader(header);
 
-        int firstDayColumn = header.stream()
-                .filter(c -> TimeSheetsAppUtils.hasDigit(c.getValue()))
-                .mapToInt(c -> c.getColumn())
-                .sorted()
-                .findFirst()
-                .orElse(NO_VALUE);
-
+        int firstDayColumn = findFirstDayColumn(header, headerRow);
 
         return cells.stream()
                 .filter(c -> (c.getRow() > headerRow) && (c.getColumn() < firstDayColumn))
@@ -352,19 +360,9 @@ public final class TimeSheetsAppUtils {
         final String shiftTwoString = "Нормо години 2 зміна";
         final String shiftThreeString = "Нормо години 3 зміна";
 
-        int headerRow = cells.stream()
-                .filter(c -> c.getValue().contains(PERSONNEL_NUMBER_SEARCH_TEXT))
-                .map(c -> c.getRow())
-                .findFirst()
-                .orElse(NO_VALUE);
+        int headerRow = findHeader(cells);
 
-
-        int firstDayColumn = cells.stream()
-                .filter(c -> TimeSheetsAppUtils.hasDigit(c.getValue()) && c.getRow() == headerRow)
-                .mapToInt(c -> c.getColumn())
-                .sorted()
-                .findFirst()
-                .orElse(NO_VALUE);
+        int firstDayColumn = findFirstDayColumn(cells, headerRow);
 
         List<Cell> withoutDates = cells.stream()
                 .filter(c -> c.getRow() == headerRow && c.getColumn() < firstDayColumn)
@@ -382,6 +380,24 @@ public final class TimeSheetsAppUtils {
         return Stream.of(withoutDates, withShifts)
                 .flatMap(list -> list.stream())
                 .collect(Collectors.toList());
+    }
+
+    private static int findFirstDayColumn(List<Cell> cells, int headerRow) {
+        return cells.stream()
+                .filter(c -> TimeSheetsAppUtils.hasDigit(c.getValue()) && c.getRow() == headerRow)
+                .mapToInt(c -> c.getColumn())
+                .sorted()
+                .findFirst()
+                .orElse(NO_VALUE);
+    }
+
+    public static int findHeader(List<Cell> cells) {
+        return cells.stream()
+                .filter(c -> c.getValue().contains(TimeSheetsAppUtils.PERSONNEL_NUMBER_SEARCH_TEXT))
+                .map(Cell::getRow)
+                .findFirst()
+                .orElse(NO_VALUE);
+
     }
 }
 

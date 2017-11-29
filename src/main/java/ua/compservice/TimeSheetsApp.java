@@ -89,7 +89,7 @@ public class TimeSheetsApp {
                 throw new TimeSheetsException(message);
             }
 
-            List<Cell> cells = TimeSheetsAppUtils.from(source);
+            List<Cell> cells = TimeSheetsAppUtils.from(source, 0);
 
             List<Cell> header = TimeSheetsAppUtils.extractHeader(cells);
 
@@ -125,7 +125,7 @@ public class TimeSheetsApp {
                 throw  new TimeSheetsException(message);
             } else {
 
-                List<Cell> cells = TimeSheetsAppUtils.from(file);
+                List<Cell> cells = TimeSheetsAppUtils.from(file, 0);
 
                 int personnelColumn = cells.stream()
                         .filter(c -> c.getValue().contains(TimeSheetsAppUtils.PERSONNEL_NUMBER_SEARCH_TEXT))
@@ -173,7 +173,7 @@ public class TimeSheetsApp {
 
             } else {
 
-                List<Cell> cells = TimeSheetsAppUtils.from(file);
+                List<Cell> cells = TimeSheetsAppUtils.from(file, 0);
 
                 int personnelColumn = cells.stream()
                         .filter(c -> c.getValue().contains(TimeSheetsAppUtils.PERSONNEL_NUMBER_SEARCH_TEXT))
@@ -208,7 +208,7 @@ public class TimeSheetsApp {
                 throw new TimeSheetsException(message);
             }
 
-            List<Cell> cells = TimeSheetsAppUtils.from(file);
+            List<Cell> cells = TimeSheetsAppUtils.from(file, 0);
 
 
             final int rowHeader = cells.stream()
