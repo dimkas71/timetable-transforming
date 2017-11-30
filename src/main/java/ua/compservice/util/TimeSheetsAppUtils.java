@@ -46,6 +46,7 @@ public final class TimeSheetsAppUtils {
     //region Patterns
     private static final Pattern DIGIT_FOUNDER_PATTERN = Pattern.compile(DIGIT_FIND_REGEX_EXPRESSION);
     private static final Pattern TIME_FOUNDER_PATTERN = Pattern.compile(TIME_REGEX_EXPRESSION);
+    private static final String TIME_SHEET_WORD = "Табель";
     //endregion
 
 
@@ -114,8 +115,12 @@ public final class TimeSheetsAppUtils {
     }
 
     public static List<Cell> from(Path... sources) {
+
+        if (sources.length == 0) return new ArrayList<>();
+
         List<Cell> collected = new ArrayList<>();
 
+        //1.collect all cells from variable sources to a list
         Arrays.stream(sources)
                 .forEach(p -> {
                     //
@@ -127,7 +132,59 @@ public final class TimeSheetsAppUtils {
 
                     collected.addAll(from(p, lastRow));
                 });
-        return collected;
+
+        //2. extract the first header from the collected list
+        List<Cell> packedCells = packedFrom(collected);
+
+
+        return packedCells;
+    }
+
+    /**
+     *
+     * @param collected
+     * @return a packed list of cells, without doubled headers and empty rows...
+     */
+    private static List<Cell> packedFrom(List<Cell> collected) {
+
+        List<Cell> header = extractHeader(collected);
+
+
+        //skip rows contains header and TIME_SHEET_WORD
+        List<Integer> rowsToSkip = collected.stream()
+                .filter(c -> c.getValue().contains(PERSONNEL_NUMBER_SEARCH_TEXT) || c.getValue().contains(TIME_SHEET_WORD))
+                .mapToInt(Cell::getRow)
+                .collect(ArrayList<Integer>::new, ArrayList<Integer>::add, ArrayList<Integer>::addAll);
+
+
+
+
+        //3. all without headers
+        List<Cell> withoutAnyHeaders = collected.stream()
+                .filter(c -> rowsToSkip.indexOf(c.getRow()) == -1)
+                .collect(Collectors.toList());
+
+        //4. merge header and without header in the one big list of cells
+
+        List<Cell> temporaryCollection = Stream.concat(header.stream(), withoutAnyHeaders.stream())
+                .collect(Collectors.toList());
+
+        //5. pack cells to another list without other headers and empty rows...
+
+        Map<Integer, List<Cell>> groupedByRow = temporaryCollection.stream()
+                .collect(Collectors.groupingBy(Cell::getRow));
+
+        int newRowNumber = 0;
+
+        Map<Integer, Integer> rowsMapper = new HashMap<>();
+
+        for (Integer oldRowNumber : groupedByRow.keySet()) {
+            rowsMapper.put(oldRowNumber, newRowNumber++);
+        }
+
+        return temporaryCollection.stream()
+                .map(c -> new Cell(rowsMapper.get(c.getRow()), c.getColumn(), c.getValue()))
+                .collect(Collectors.toList());
     }
 
     public static void merge(Path to, Path... filesFrom) {
@@ -262,7 +319,8 @@ public final class TimeSheetsAppUtils {
         Objects.requireNonNull(currentSheet);
         Objects.requireNonNull(otherCells);
 
-        int nextRow = currentSheet.getLastRowNum() + 1 - shiftFrom;
+        //int nextRow = currentSheet.getLastRowNum() + 1 - shiftFrom;
+        int nextRow = currentSheet.getLastRowNum() - shiftFrom;
 
         otherCells.stream()
                 .forEach(currentCell -> {
@@ -398,6 +456,24 @@ public final class TimeSheetsAppUtils {
                 .findFirst()
                 .orElse(NO_VALUE);
 
+    }
+
+    public static void mergeAll(Path to, Path... sources) {
+        try (XSSFWorkbook workbook = new XSSFWorkbook()) {
+
+            XSSFSheet sheet = workbook.createSheet("timesheet");
+
+            List<Cell> cells = from(sources);
+            writeTo(sheet, cells, 0);
+
+            try(FileOutputStream fos = new FileOutputStream(to.toFile())) {
+                workbook.write(fos);
+            }
+
+        } catch (IOException e) {
+            logger.error("{}", e.getMessage());
+            e.printStackTrace();
+        }
     }
 }
 

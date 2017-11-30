@@ -70,7 +70,8 @@ public class TimeSheetsApp {
                     .toArray(new Path[0]);
 
             Path to = homeDir.resolve(Paths.get(mergeCommand.getOutput()));
-            TimeSheetsAppUtils.merge(to, files);
+            //TimeSheetsAppUtils.merge(to, files);
+            TimeSheetsAppUtils.mergeAll(to, files);
             //endregion
 
         } else if ("create-timesheet".equals(parsedCommand)) {
