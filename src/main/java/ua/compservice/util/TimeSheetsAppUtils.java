@@ -16,7 +16,6 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.sql.Time;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -34,6 +33,7 @@ public final class TimeSheetsAppUtils {
     public static final String FIO_SEARCH_TEXT = "Фамилия И. О.";
     public static final String PERSONNEL_NUMBER_SEARCH_TEXT = "Таб. №";
     public static final String CURRENT_POSITION_SEARCH_TEXT = "Должность";
+    public static final String TEAM_SEARCH_TEXT = "бригада";
 
     public static final String EMPTY_STRING = "";
 
@@ -458,12 +458,12 @@ public final class TimeSheetsAppUtils {
 
     }
 
-    public static void mergeAll(Path to, Path... sources) {
+    public static void mergeAll(Path to, boolean shouldInsertTeam, Path... sources) {
         try (XSSFWorkbook workbook = new XSSFWorkbook()) {
 
             XSSFSheet sheet = workbook.createSheet("timesheet");
 
-            List<Cell> cells = from(sources);
+            List<Cell> cells = shouldInsertTeam ? withTeamFrom(sources): from(sources);
             writeTo(sheet, cells, 0);
 
             try(FileOutputStream fos = new FileOutputStream(to.toFile())) {
@@ -475,6 +475,19 @@ public final class TimeSheetsAppUtils {
             e.printStackTrace();
         }
     }
+
+    private static List<Cell> withTeamFrom(Path... sources) {
+        if (sources.length ==  0) return new ArrayList<>();
+
+
+
+
+
+
+
+        return null;
+    }
+
 }
 
 

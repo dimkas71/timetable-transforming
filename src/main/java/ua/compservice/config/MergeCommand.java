@@ -13,6 +13,9 @@ public class MergeCommand {
     @Parameter(description = "Merge files", required = true)
     private List<String> files;
 
+    @Parameter(description = "insert a column with team name", required = false)
+    private boolean useTeam;
+
     @Parameter(names = {"-o", "--output"}, description = "Output file", required = true)
     private String output;
 
