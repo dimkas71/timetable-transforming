@@ -71,7 +71,7 @@ public class TimeSheetsApp {
 
             Path to = homeDir.resolve(Paths.get(mergeCommand.getOutput()));
 
-            TimeSheetsAppUtils.mergeAll(to, mergeCommand.isUseTeam(), files);
+            TimeSheetsAppUtils.mergeAll(to, mergeCommand.withTeam(), files);
             //endregion
 
         } else if ("create-timesheet".equals(parsedCommand)) {
@@ -89,6 +89,8 @@ public class TimeSheetsApp {
                 logger.error("{}", message);
                 throw new TimeSheetsException(message);
             }
+
+            //TODO: method from private and hide the code below behind call save(to, path...)
 
             List<Cell> cells = TimeSheetsAppUtils.from(source, 0);
 
@@ -125,6 +127,8 @@ public class TimeSheetsApp {
                 logger.error("{}", message);
                 throw  new TimeSheetsException(message);
             } else {
+
+                //TODO: do the same thing as above... hide the method from
 
                 List<Cell> cells = TimeSheetsAppUtils.from(file, 0);
 
@@ -174,6 +178,8 @@ public class TimeSheetsApp {
 
             } else {
 
+                //TODO: the same as above
+
                 List<Cell> cells = TimeSheetsAppUtils.from(file, 0);
 
                 int personnelColumn = cells.stream()
@@ -208,6 +214,8 @@ public class TimeSheetsApp {
                 logger.error("{}", message);
                 throw new TimeSheetsException(message);
             }
+
+            //TODO: refactor this(hide from behind the method from TimeSheetsAppUtils...
 
             List<Cell> cells = TimeSheetsAppUtils.from(file, 0);
 
