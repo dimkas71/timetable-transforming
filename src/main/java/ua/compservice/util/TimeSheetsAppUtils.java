@@ -281,24 +281,19 @@ public final class TimeSheetsAppUtils {
 
         List<Cell> left = extractLeftExceptOf(cells, header);
 
-        //TODO: rewrite the code below using stream api style...
         List<Cell> hours = new ArrayList<>();
 
-        for (Map.Entry<Integer, Map<Integer, Integer>> outerEntry : collectedNormHours.entrySet()) {
-            int row = outerEntry.getKey();
-
-            for (Map.Entry<Integer, Integer> innerEntry : outerEntry.getValue().entrySet()) {
-                int shift = innerEntry.getKey();
-                int shiftHours = innerEntry.getValue();
-
-                hours.add(
-                        new Cell(row, firstColumn + shift - 1, String.valueOf(shiftHours))
-                );
-            }
-        }
+        collectedNormHours.keySet()
+                .stream()
+                .forEach(k -> {
+                    collectedNormHours.get(k).entrySet()
+                            .stream()
+                            .forEach(e -> {
+                                hours.add(new Cell(k, firstColumn + e.getKey() - 1, String.valueOf(e.getValue())));
+                            });
+                });
 
         save(dest, Stream.of(header, left, hours).flatMap(l -> l.stream()).collect(Collectors.toList()));
-
 
     }
 
