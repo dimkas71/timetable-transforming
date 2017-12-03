@@ -1,5 +1,8 @@
 package ua.compservice.util;
 
+import lombok.AllArgsConstructor;
+import lombok.NonNull;
+import lombok.Value;
 import org.apache.poi.openxml4j.exceptions.InvalidFormatException;
 import org.apache.poi.ss.usermodel.CellType;
 import org.apache.poi.ss.usermodel.Row;
@@ -10,7 +13,6 @@ import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import ua.compservice.TimeSheetsException;
-import ua.compservice.model.Cell;
 
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -677,6 +679,16 @@ public final class TimeSheetsAppUtils {
             .map(Map.Entry::getKey)
             .findFirst()
             .orElse(NO_TEAM_TEXT);
+    }
+
+    @Value
+    @AllArgsConstructor
+    static class Cell {
+
+        private final @NonNull int row;
+        private final @NonNull int column;
+        private final @NonNull String value;
+
     }
 
 }
