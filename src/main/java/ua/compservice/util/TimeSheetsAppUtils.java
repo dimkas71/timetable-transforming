@@ -29,230 +29,29 @@ public final class TimeSheetsAppUtils {
     private static final Logger logger = LoggerFactory.getLogger(TimeSheetsAppUtils.class);
 
     //region Constants
-    public static final int NO_VALUE = -1;
+    static final int NO_VALUE = -1;
 
-    public static final String FIO_SEARCH_TEXT = "Фамилия И. О.";
-    public static final String PERSONNEL_NUMBER_SEARCH_TEXT = "Таб. №";
-    public static final String CURRENT_POSITION_SEARCH_TEXT = "Должность";
-    public static final String TEAM_SEARCH_TEXT = "бригада";
+    static final String FIO_SEARCH_TEXT = "Фамилия И. О.";
+    static final String PERSONNEL_NUMBER_SEARCH_TEXT = "Таб. №";
+    static final String CURRENT_POSITION_SEARCH_TEXT = "Должность";
+    static final String TEAM_SEARCH_TEXT = "бригада";
 
-    public static final String EMPTY_STRING = "";
+    static final String EMPTY_STRING = "";
 
-    public static final String TIME_REGEX_EXPRESSION
+    static final String TIME_REGEX_EXPRESSION
             = "(?<hours>\\d{1})\\/(?<workshift>\\d{1})\\((?<hoursminutes>\\d{1}:\\d{2})\\)";
 
-    public static final String DIGIT_FIND_REGEX_EXPRESSION = "\\d{1,}";
+    static final String DIGIT_FIND_REGEX_EXPRESSION = "\\d{1,}";
     //endregion
 
     //region Patterns
-    private static final Pattern DIGIT_FOUNDER_PATTERN = Pattern.compile(DIGIT_FIND_REGEX_EXPRESSION);
-    private static final Pattern TIME_FOUNDER_PATTERN = Pattern.compile(TIME_REGEX_EXPRESSION);
-    private static final String TIME_SHEET_WORD = "Табель";
-    public static final String NO_TEAM_TEXT = "NO TEAM";
+    static final Pattern DIGIT_FOUNDER_PATTERN = Pattern.compile(DIGIT_FIND_REGEX_EXPRESSION);
+    static final Pattern TIME_FOUNDER_PATTERN = Pattern.compile(TIME_REGEX_EXPRESSION);
+    static final String TIME_SHEET_WORD = "Табель";
+    static final String NO_TEAM_TEXT = "NO TEAM";
     //endregion
 
 
-    public static List<Cell> from(Path source, final int rowShift) {
-
-        if (!Files.exists(source)) {
-            String message = String.format("File %s doesn't exist", source.toString());
-            logger.error("{}", message);
-            throw new TimeSheetsException(message);
-        }
-
-
-        List<Cell> content = new ArrayList<>();
-
-        try {
-            try(XSSFWorkbook workbook = new XSSFWorkbook(source.toFile())) {
-
-                XSSFSheet activeSheet = workbook.getSheetAt(0);
-
-
-                Iterator<Row> rowIterator = activeSheet.iterator();
-
-                while (rowIterator.hasNext()) {
-                    Row currentRow = rowIterator.next();
-
-                    Iterator<org.apache.poi.ss.usermodel.Cell> cellIterator = currentRow.cellIterator();
-
-                    while (cellIterator.hasNext()) {
-                        org.apache.poi.ss.usermodel.Cell currentCell = cellIterator.next();
-
-                        String aValue = "";
-
-                        CellType cellType = currentCell.getCellTypeEnum();
-                        if (cellType == CellType.NUMERIC) {
-                            aValue = String.valueOf(new Integer((int) currentCell.getNumericCellValue()));
-                        } else if (cellType == CellType.STRING) {
-                            aValue = currentCell.getStringCellValue();
-                        } else {
-                            aValue = EMPTY_STRING;
-                        }
-
-
-                        content.add(
-                                new Cell(
-                                        currentRow.getRowNum() + rowShift,
-                                        currentCell.getColumnIndex(),
-                                        aValue
-                                )
-                        );
-
-                    }
-
-                }
-
-            }
-        } catch (IOException e) {
-            logger.error("{}", e);
-            e.printStackTrace();
-        } catch (InvalidFormatException e) {
-            logger.error("{}", e);
-            e.printStackTrace();
-        }
-
-        return content;
-
-    }
-
-    public static List<Cell> from(Path... sources) {
-
-        if (sources.length == 0) return new ArrayList<>();
-
-        List<Cell> collected = new ArrayList<>();
-
-        //1.collect all cells from variable sources to a list
-        Arrays.stream(sources)
-                .forEach(p -> {
-                    //
-                    int lastRow = collected.stream()
-                        .map(Cell::getRow)
-                        .sorted(Comparator.reverseOrder())
-                        .findFirst()
-                        .orElse(0);
-
-                    collected.addAll(from(p, lastRow));
-                });
-
-        //2. extract the first header from the collected list
-        List<Cell> packedCells = packedFrom(collected);
-
-
-        return packedCells;
-    }
-
-    /**
-     *
-     * @param collected
-     * @return a packed list of cells, without doubled headers and empty rows...
-     */
-    private static List<Cell> packedFrom(List<Cell> collected) {
-
-        List<Cell> header = extractHeader(collected);
-
-
-        //skip rows contains header and TIME_SHEET_WORD
-        List<Integer> rowsToSkip = collected.stream()
-                .filter(c -> c.getValue().contains(PERSONNEL_NUMBER_SEARCH_TEXT) || c.getValue().contains(TIME_SHEET_WORD))
-                .mapToInt(Cell::getRow)
-                .collect(ArrayList<Integer>::new, ArrayList<Integer>::add, ArrayList<Integer>::addAll);
-
-
-        int fioColumn = collected.stream()
-                .filter(c -> c.getValue().contains(FIO_SEARCH_TEXT))
-                .map(Cell::getColumn)
-                .findFirst()
-                .orElse(NO_VALUE);
-
-        rowsToSkip.addAll(collected.stream()
-                .filter(c -> c.getColumn() == fioColumn && c.getValue().contains(TEAM_SEARCH_TEXT))
-                .map(Cell::getRow)
-                .collect(Collectors.toList()));
-
-
-
-        //3. all without headers
-        List<Cell> withoutAnyHeaders = collected.stream()
-                .filter(c -> rowsToSkip.indexOf(c.getRow()) == -1)
-                .collect(Collectors.toList());
-
-        //4. merge header and without header in the one big list of cells
-
-        List<Cell> temporaryCollection = Stream.concat(header.stream(), withoutAnyHeaders.stream())
-                .collect(Collectors.toList());
-
-        //5. pack cells to another list without other headers and empty rows...
-
-        Map<Integer, List<Cell>> groupedByRow = temporaryCollection.stream()
-                .collect(Collectors.groupingBy(Cell::getRow));
-
-        int newRowNumber = 0;
-
-        Map<Integer, Integer> rowsMapper = new HashMap<>();
-
-        for (Integer oldRowNumber : groupedByRow.keySet()) {
-            rowsMapper.put(oldRowNumber, newRowNumber++);
-        }
-
-        return temporaryCollection.stream()
-                .map(c -> new Cell(rowsMapper.get(c.getRow()), c.getColumn(), c.getValue()))
-                .collect(Collectors.toList());
-    }
-
-    public static void merge(Path to, Path... filesFrom) {
-
-
-        try (XSSFWorkbook workbook = new XSSFWorkbook()) {
-
-            XSSFSheet currentSheet = workbook.createSheet("timetable");
-
-            int currentRow = 0;
-            boolean isHeaderOutputed = false;
-
-            /*
-                1. first of all the header from the first path should be outputed
-                2. then it ouputs all the rows from the rowHeader + 1
-            */
-
-            for (Path path : filesFrom) {
-                List<Cell> content = from(path);
-
-                int from = findHeader(content);
-
-                if (from == NO_VALUE) {
-                    logger.debug("In the file {} a header with text {} doesn't found", path.toFile().getAbsolutePath(), PERSONNEL_NUMBER_SEARCH_TEXT);
-                    continue;
-                } else {
-                    //Main handler is at this point....
-                    if (!isHeaderOutputed) {
-                        List<Cell> headerCells = content.stream()
-                                .filter(c -> c.getRow() == from)
-                                .collect(Collectors.toList());
-
-                        writeTo(currentSheet, headerCells, from + 1);
-
-                        isHeaderOutputed = true;
-                    }
-
-                    List<Cell> otherCells = content.stream()
-                            .filter(c -> c.getRow() > from)
-                            .collect(Collectors.toList());
-
-                    writeTo(currentSheet, otherCells, from + 1);
-
-                }
-            }
-
-            try (FileOutputStream fos = new FileOutputStream(to.toFile())) {
-                workbook.write(fos);
-            }
-
-        } catch (IOException e) {
-            logger.error("Exception has been raised {}", e);
-        }
-
-    }
 
     public static boolean hasDigit(String aString) {
         if (aString == null || aString.isEmpty())
@@ -327,6 +126,340 @@ public final class TimeSheetsAppUtils {
 
     }
 
+    public static List<Cell> extractHeader(List<Cell> allCells) {
+
+        int headerRow = findHeader(allCells);
+
+        return allCells.stream()
+                .filter(c -> c.getRow() == headerRow)
+                .collect(Collectors.toList());
+
+    }
+
+    public static List<Cell> extractLeftExceptOf(List<Cell> cells, List<Cell> header) {
+
+        int headerRow = findHeader(header);
+
+        int firstDayColumn = findFirstDayColumn(header, headerRow);
+
+        return cells.stream()
+                .filter(c -> (c.getRow() > headerRow) && (c.getColumn() < firstDayColumn))
+                .collect(Collectors.toList());
+
+
+
+    }
+
+    public static void merge(Path to, boolean shouldInsertTeam, Path... sources) {
+        try (XSSFWorkbook workbook = new XSSFWorkbook()) {
+
+            XSSFSheet sheet = workbook.createSheet("timesheet");
+
+            List<Cell> cells = shouldInsertTeam ? withTeamFrom(sources): from(sources);
+            writeTo(sheet, cells, 0);
+
+            try(FileOutputStream fos = new FileOutputStream(to.toFile())) {
+                workbook.write(fos);
+            }
+
+        } catch (IOException e) {
+            logger.error("{}", e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    public static void createTimeSheet(Path to, Path source) {
+
+        List<Cell> cells = from(source, 0);
+
+        List<Cell> header = extractHeader(cells);
+
+        List<Cell> left = extractLeftExceptOf(cells, header);
+
+
+        //all others should be converted into time sheet cells
+
+        List<Cell> others = cells.stream()
+                .filter(c -> !header.contains(c) && !left.contains(c))
+                .map(TimeSheetsAppUtils::newCell)
+                .collect(Collectors.toList());
+
+        List<Cell> all = Stream.of(header, left, others)
+                .flatMap(l -> l.stream())
+                .collect(Collectors.toList());
+
+        save(to, all);
+
+    }
+
+    public static void checkDoubles(Path source) {
+
+        List<Cell> cells = from(source, 0);
+
+        int personnelColumn = cells.stream()
+                .filter(c -> c.getValue().contains(PERSONNEL_NUMBER_SEARCH_TEXT))
+                .map(c -> c.getColumn())
+                .findFirst()
+                .orElse(NO_VALUE);
+
+        Map<String, List<Cell>> doubles = cells.stream()
+                .filter(c -> (c.getColumn() == personnelColumn) && !c.getValue().isEmpty())
+                .collect(Collectors.groupingBy(Cell::getValue));
+
+
+        doubles.entrySet()
+                .stream()
+                .filter(e -> e.getValue().size() > 1)
+                .forEach(e -> {
+
+                    final List<Integer> rows = e.getValue().stream()
+                            .map(c -> c.getRow() + 1)
+                            .collect(Collectors.toList());
+
+                    final String personnalNumber = e.getKey();
+                    logger.debug("For the PN {} there are rows with doubled values. List rows -> {}",
+                            personnalNumber, rows);
+                    System.out.println(String.format("For the PN %s, there are rows with doubles. List rows %s", personnalNumber, rows));
+                });
+    }
+
+    public static void checkPersonnelNumber(Path source) {
+
+        List<Cell> cells = TimeSheetsAppUtils.from(source, 0);
+
+        int personnelColumn = cells.stream()
+                .filter(c -> c.getValue().contains(PERSONNEL_NUMBER_SEARCH_TEXT))
+                .map(c -> c.getColumn())
+                .findFirst()
+                .orElse(NO_VALUE);
+
+        cells.stream()
+                .filter(c -> (c.getColumn() == personnelColumn) && !c.getValue().isEmpty() && !c.getValue().contains(PERSONNEL_NUMBER_SEARCH_TEXT))
+                .filter(c -> !matches(c.getValue()))
+                .forEach(c -> {
+                    int row = c.getRow() + 1;
+                    final String personnelNumber = c.getValue();
+                    logger.info("Row: {}, the personal number {} isn't correct", row, personnelNumber);
+                    System.out.println(String.format("Row: %d, the personal number %s isn't correct", row, personnelNumber));
+                });
+
+
+    }
+
+    public static void createNormHours(Path source, Path dest) {
+
+        List<Cell> cells = from(source, 0);
+
+
+        final int rowHeader = cells.stream()
+                .filter(c -> c.getValue().contains(PERSONNEL_NUMBER_SEARCH_TEXT))
+                .mapToInt(c -> c.getRow())
+                .findFirst()
+                .orElse(NO_VALUE);
+
+        final int firstColumn = cells.stream()
+                .filter(c -> c.getRow() == rowHeader && hasDigit(c.getValue()))
+                .mapToInt(c -> c.getColumn())
+                .sorted()
+                .findFirst()
+                .orElse(NO_VALUE);
+
+        Map<Integer, Map<Integer, Integer>> collectedNormHours = cells.stream()
+                .filter(c -> c.getRow() > rowHeader && c.getColumn() >= firstColumn && !c.getValue().isEmpty())
+                .collect(Collectors.groupingBy(
+                        Cell::getRow,
+                        Collectors.groupingBy(
+                                c -> toWorkShift(c.getValue()),
+                                Collectors.mapping(
+                                        c -> toWorkingHours(c.getValue()),
+                                        Collectors.summingInt(i -> i)))));
+
+
+        List<Cell> header = createNewHeader(cells);
+
+        List<Cell> left = extractLeftExceptOf(cells, header);
+
+        //TODO: rewrite the code below using stream api style...
+        List<Cell> hours = new ArrayList<>();
+
+        for (Map.Entry<Integer, Map<Integer, Integer>> outerEntry : collectedNormHours.entrySet()) {
+            int row = outerEntry.getKey();
+
+            for (Map.Entry<Integer, Integer> innerEntry : outerEntry.getValue().entrySet()) {
+                int shift = innerEntry.getKey();
+                int shiftHours = innerEntry.getValue();
+
+                hours.add(
+                        new Cell(row, firstColumn + shift - 1, String.valueOf(shiftHours))
+                );
+            }
+        }
+
+        save(dest, Stream.of(header, left, hours).flatMap(l -> l.stream()).collect(Collectors.toList()));
+
+
+    }
+
+    static List<Cell> from(Path source, final int rowShift) {
+
+        if (!Files.exists(source)) {
+            String message = String.format("File %s doesn't exist", source.toString());
+            logger.error("{}", message);
+            throw new TimeSheetsException(message);
+        }
+
+
+        List<Cell> content = new ArrayList<>();
+
+        try {
+            try(XSSFWorkbook workbook = new XSSFWorkbook(source.toFile())) {
+
+                XSSFSheet activeSheet = workbook.getSheetAt(0);
+
+
+                Iterator<Row> rowIterator = activeSheet.iterator();
+
+                while (rowIterator.hasNext()) {
+                    Row currentRow = rowIterator.next();
+
+                    Iterator<org.apache.poi.ss.usermodel.Cell> cellIterator = currentRow.cellIterator();
+
+                    while (cellIterator.hasNext()) {
+                        org.apache.poi.ss.usermodel.Cell currentCell = cellIterator.next();
+
+                        String aValue = "";
+
+                        CellType cellType = currentCell.getCellTypeEnum();
+                        if (cellType == CellType.NUMERIC) {
+                            aValue = String.valueOf(new Integer((int) currentCell.getNumericCellValue()));
+                        } else if (cellType == CellType.STRING) {
+                            aValue = currentCell.getStringCellValue();
+                        } else {
+                            aValue = EMPTY_STRING;
+                        }
+
+
+                        content.add(
+                                new Cell(
+                                        currentRow.getRowNum() + rowShift,
+                                        currentCell.getColumnIndex(),
+                                        aValue
+                                )
+                        );
+
+                    }
+
+                }
+
+            }
+        } catch (IOException e) {
+            logger.error("{}", e);
+            e.printStackTrace();
+        } catch (InvalidFormatException e) {
+            logger.error("{}", e);
+            e.printStackTrace();
+        }
+
+        return content;
+
+    }
+
+    static List<Cell> from(Path... sources) {
+
+        if (sources.length == 0) return new ArrayList<>();
+
+        List<Cell> collected = new ArrayList<>();
+
+        //1.collect all cells from variable sources to a list
+        Arrays.stream(sources)
+                .forEach(p -> {
+                    //
+                    int lastRow = collected.stream()
+                        .map(Cell::getRow)
+                        .sorted(Comparator.reverseOrder())
+                        .findFirst()
+                        .orElse(0);
+
+                    collected.addAll(from(p, lastRow));
+                });
+
+        //2. extract the first header from the collected list
+        List<Cell> packedCells = packedFrom(collected);
+
+
+        return packedCells;
+    }
+
+    static int findHeader(List<Cell> cells) {
+        return cells.stream()
+                .filter(c -> c.getValue().contains(TimeSheetsAppUtils.PERSONNEL_NUMBER_SEARCH_TEXT))
+                .map(Cell::getRow)
+                .findFirst()
+                .orElse(NO_VALUE);
+
+    }
+
+
+
+
+    /**
+     *
+     * @param collected
+     * @return a packed list of cells, without doubled headers and empty rows...
+     */
+    private static List<Cell> packedFrom(List<Cell> collected) {
+
+        List<Cell> header = extractHeader(collected);
+
+
+        //skip rows contains header and TIME_SHEET_WORD
+        List<Integer> rowsToSkip = collected.stream()
+                .filter(c -> c.getValue().contains(PERSONNEL_NUMBER_SEARCH_TEXT) || c.getValue().contains(TIME_SHEET_WORD))
+                .mapToInt(Cell::getRow)
+                .collect(ArrayList<Integer>::new, ArrayList<Integer>::add, ArrayList<Integer>::addAll);
+
+
+        int fioColumn = collected.stream()
+                .filter(c -> c.getValue().contains(FIO_SEARCH_TEXT))
+                .map(Cell::getColumn)
+                .findFirst()
+                .orElse(NO_VALUE);
+
+        rowsToSkip.addAll(collected.stream()
+                .filter(c -> c.getColumn() == fioColumn && c.getValue().contains(TEAM_SEARCH_TEXT))
+                .map(Cell::getRow)
+                .collect(Collectors.toList()));
+
+
+
+        //3. all without headers
+        List<Cell> withoutAnyHeaders = collected.stream()
+                .filter(c -> rowsToSkip.indexOf(c.getRow()) == -1)
+                .collect(Collectors.toList());
+
+        //4. merge header and without header in the one big list of cells
+
+        List<Cell> temporaryCollection = Stream.concat(header.stream(), withoutAnyHeaders.stream())
+                .collect(Collectors.toList());
+
+        //5. pack cells to another list without other headers and empty rows...
+
+        Map<Integer, List<Cell>> groupedByRow = temporaryCollection.stream()
+                .collect(Collectors.groupingBy(Cell::getRow));
+
+        int newRowNumber = 0;
+
+        Map<Integer, Integer> rowsMapper = new HashMap<>();
+
+        for (Integer oldRowNumber : groupedByRow.keySet()) {
+            rowsMapper.put(oldRowNumber, newRowNumber++);
+        }
+
+        return temporaryCollection.stream()
+                .map(c -> new Cell(rowsMapper.get(c.getRow()), c.getColumn(), c.getValue()))
+                .collect(Collectors.toList());
+    }
+
     private static void writeTo(XSSFSheet currentSheet, List<Cell> otherCells, int shiftFrom) {
 
         Objects.requireNonNull(currentSheet);
@@ -354,34 +487,7 @@ public final class TimeSheetsAppUtils {
                 });
     }
 
-    public static List<Cell> extractHeader(List<Cell> allCells) {
-
-        //TODO: write test for this function with using Mockito framework
-
-        int headerRow = findHeader(allCells);
-
-
-        return allCells.stream()
-                .filter(c -> c.getRow() == headerRow)
-                .collect(Collectors.toList());
-
-    }
-
-    public static List<Cell> extractLeftExceptOf(List<Cell> cells, List<Cell> header) {
-
-        int headerRow = findHeader(header);
-
-        int firstDayColumn = findFirstDayColumn(header, headerRow);
-
-        return cells.stream()
-                .filter(c -> (c.getRow() > headerRow) && (c.getColumn() < firstDayColumn))
-                .collect(Collectors.toList());
-
-
-
-    }
-
-    public static void save(Path to, List<Cell> all) {
+    private static void save(Path to, List<Cell> all) {
 
         try (XSSFWorkbook workbook = new XSSFWorkbook()) {
 
@@ -409,7 +515,7 @@ public final class TimeSheetsAppUtils {
         }
     }
 
-    public static Cell newCell(Cell c) {
+    private static Cell newCell(Cell c) {
         String value = c.getValue();
         if (value.isEmpty())
             return new Cell(c.getRow(), c.getColumn(), value);
@@ -425,7 +531,7 @@ public final class TimeSheetsAppUtils {
         return new Cell(c.getRow(), c.getColumn(), String.valueOf(hours));
     }
 
-    public static List<Cell> createNewHeader(List<Cell> cells) {
+    private static List<Cell> createNewHeader(List<Cell> cells) {
 
         final String shiftOneString = "Нормо години 1 зміна";
         final String shiftTwoString = "Нормо години 2 зміна";
@@ -462,39 +568,12 @@ public final class TimeSheetsAppUtils {
                 .orElse(NO_VALUE);
     }
 
-    public static int findHeader(List<Cell> cells) {
-        return cells.stream()
-                .filter(c -> c.getValue().contains(TimeSheetsAppUtils.PERSONNEL_NUMBER_SEARCH_TEXT))
-                .map(Cell::getRow)
-                .findFirst()
-                .orElse(NO_VALUE);
-
-    }
-
-    public static int findPersonnelNumberColumn(List<Cell> cells) {
+    private static int findPersonnelNumberColumn(List<Cell> cells) {
         return cells.stream()
                 .filter(c -> c.getValue().contains(PERSONNEL_NUMBER_SEARCH_TEXT))
                 .map(Cell::getColumn)
                 .findFirst()
                 .orElse(NO_VALUE);
-    }
-
-    public static void mergeAll(Path to, boolean shouldInsertTeam, Path... sources) {
-        try (XSSFWorkbook workbook = new XSSFWorkbook()) {
-
-            XSSFSheet sheet = workbook.createSheet("timesheet");
-
-            List<Cell> cells = shouldInsertTeam ? withTeamFrom(sources): from(sources);
-            writeTo(sheet, cells, 0);
-
-            try(FileOutputStream fos = new FileOutputStream(to.toFile())) {
-                workbook.write(fos);
-            }
-
-        } catch (IOException e) {
-            logger.error("{}", e.getMessage());
-            e.printStackTrace();
-        }
     }
 
     private static List<Cell> withTeamFrom(Path... sources) {
@@ -599,7 +678,6 @@ public final class TimeSheetsAppUtils {
             .findFirst()
             .orElse(NO_TEAM_TEXT);
     }
-
 
 }
 
