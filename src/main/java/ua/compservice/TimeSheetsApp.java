@@ -66,7 +66,7 @@ public class TimeSheetsApp {
 
             Path to = homeDir.resolve(Paths.get(mergeCommand.getOutput()));
 
-            TimeSheetsAppUtils.merge(to, mergeCommand.withTeam(), files);
+            TimeSheetsAppUtils.merge(files, to, mergeCommand.withTeam());
             //endregion
 
         } else if ("create-timesheet".equals(parsedCommand)) {

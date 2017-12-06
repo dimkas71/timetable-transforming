@@ -24,7 +24,7 @@ public class AllTimeTableVariationsGenerator {
         try {
             Stream<Path> filesStream = Files.list(currrentDir);
 
-            Set<String> strings = filesStream.map(p -> TimeSheetsAppUtils.from(p))
+            Set<String> strings = filesStream.map(p -> TimeSheetsAppUtils.from(p, 0))
                     .flatMap(listCells -> onlyForTimeTable(listCells).stream())
                     .flatMap(cell -> Arrays.stream(cell.getValue().split("\n")))
                     .collect(Collectors.toSet());

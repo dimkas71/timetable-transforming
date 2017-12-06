@@ -42,7 +42,7 @@ class TimeSheetsAppUtilsTest {
     @DisplayName("hasDigit test")
     @ParameterizedTest(name = "{index}, \"{0}\" -> {1}")
     @CsvSource({", false", "0ddd,true", "8/1(8:00), true", "d, false", "ddd1ss, true"})
-    void test_hasDirit(String toMatch, boolean result) {
+    void test_hasDigit(String toMatch, boolean result) {
         Assertions.assertEquals(result, TimeSheetsAppUtils.hasDigit(toMatch));
     }
 
@@ -66,7 +66,8 @@ class TimeSheetsAppUtilsTest {
                     Arguments.of("10/0272", true),
                     Arguments.of("10/0084", true),
                     Arguments.of("d0/0084", false),
-                    Arguments.of("100084", false)
+                    Arguments.of("100084", false),
+                    Arguments.of("", false)
                 );
     }
 

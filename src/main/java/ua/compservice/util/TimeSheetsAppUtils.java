@@ -54,7 +54,6 @@ public final class TimeSheetsAppUtils {
     //endregion
 
 
-
     public static boolean hasDigit(String aString) {
         if (aString == null || aString.isEmpty())
             return false;
@@ -149,18 +148,17 @@ public final class TimeSheetsAppUtils {
                 .collect(Collectors.toList());
 
 
-
     }
 
-    public static void merge(Path to, boolean shouldInsertTeam, Path... sources) {
+    public static void merge(Path[] sources, Path to, boolean withTeam) {
         try (XSSFWorkbook workbook = new XSSFWorkbook()) {
 
             XSSFSheet sheet = workbook.createSheet("timesheet");
 
-            List<Cell> cells = shouldInsertTeam ? withTeamFrom(sources): from(sources);
+            List<Cell> cells = fromAll(sources, withTeam);
             writeTo(sheet, cells, 0);
 
-            try(FileOutputStream fos = new FileOutputStream(to.toFile())) {
+            try (FileOutputStream fos = new FileOutputStream(to.toFile())) {
                 workbook.write(fos);
             }
 
@@ -235,6 +233,8 @@ public final class TimeSheetsAppUtils {
                 .findFirst()
                 .orElse(NO_VALUE);
 
+
+        //TODO: the code doesn't work with empty personnel number!!!
         cells.stream()
                 .filter(c -> (c.getColumn() == personnelColumn) && !c.getValue().isEmpty() && !c.getValue().contains(PERSONNEL_NUMBER_SEARCH_TEXT))
                 .filter(c -> !matches(c.getValue()))
@@ -309,7 +309,7 @@ public final class TimeSheetsAppUtils {
         List<Cell> content = new ArrayList<>();
 
         try {
-            try(XSSFWorkbook workbook = new XSSFWorkbook(source.toFile())) {
+            try (XSSFWorkbook workbook = new XSSFWorkbook(source.toFile())) {
 
                 XSSFSheet activeSheet = workbook.getSheetAt(0);
 
@@ -361,32 +361,6 @@ public final class TimeSheetsAppUtils {
 
     }
 
-    static List<Cell> from(Path... sources) {
-
-        if (sources.length == 0) return new ArrayList<>();
-
-        List<Cell> collected = new ArrayList<>();
-
-        //1.collect all cells from variable sources to a list
-        Arrays.stream(sources)
-                .forEach(p -> {
-                    //
-                    int lastRow = collected.stream()
-                        .map(Cell::getRow)
-                        .sorted(Comparator.reverseOrder())
-                        .findFirst()
-                        .orElse(0);
-
-                    collected.addAll(from(p, lastRow));
-                });
-
-        //2. extract the first header from the collected list
-        List<Cell> packedCells = packedFrom(collected);
-
-
-        return packedCells;
-    }
-
     static int findHeader(List<Cell> cells) {
         return cells.stream()
                 .filter(c -> c.getValue().contains(TimeSheetsAppUtils.PERSONNEL_NUMBER_SEARCH_TEXT))
@@ -397,10 +371,7 @@ public final class TimeSheetsAppUtils {
     }
 
 
-
-
     /**
-     *
      * @param collected
      * @return a packed list of cells, without doubled headers and empty rows...
      */
@@ -426,7 +397,6 @@ public final class TimeSheetsAppUtils {
                 .filter(c -> c.getColumn() == fioColumn && c.getValue().contains(TEAM_SEARCH_TEXT))
                 .map(Cell::getRow)
                 .collect(Collectors.toList()));
-
 
 
         //3. all without headers
@@ -573,10 +543,12 @@ public final class TimeSheetsAppUtils {
                 .orElse(NO_VALUE);
     }
 
-    private static List<Cell> withTeamFrom(Path... sources) {
+    private static List<Cell> fromAll(Path[] sources, boolean withTeam) {
         if (sources.length == 0) return new ArrayList<>();
 
-        List<Cell> collected = new ArrayList<>();
+        final List<Cell> collected = new ArrayList<>();
+
+        final int shiftByDefault = 1;
 
         //1.collect all cells from variable sources to a list
         Arrays.stream(sources)
@@ -586,81 +558,84 @@ public final class TimeSheetsAppUtils {
                             .map(Cell::getRow)
                             .sorted(Comparator.reverseOrder())
                             .findFirst()
-                            .orElse(0);
+                            .orElse(shiftByDefault);
 
-                    collected.addAll(from(p, lastRow));
+                    collected.addAll(from(p, lastRow + 1));
                 });
 
-        Map<String, Integer> teamMap = collected.stream()
-                .filter(c -> c.getValue().contains(TEAM_SEARCH_TEXT))
-                .collect(Collectors.toMap(Cell::getValue, Cell::getRow));
+        if (withTeam) {
+
+            Map<String, Integer> teamMap = collected.stream()
+                    .filter(c -> c.getValue().contains(TEAM_SEARCH_TEXT))
+                    .collect(Collectors.toMap(Cell::getValue, Cell::getRow));
 
 
-        int headerRow = findHeader(collected);
-        int personnelNumberColumn = findPersonnelNumberColumn(collected);
-        int firstDayColumn = findFirstDayColumn(collected, headerRow);
+            int headerRow = findHeader(collected);
+            int personnelNumberColumn = findPersonnelNumberColumn(collected);
+            int firstDayColumn = findFirstDayColumn(collected, headerRow);
 
-        Map<Integer, String> rowsToTeam = collected.stream()
-                .filter(c -> c.getColumn() == personnelNumberColumn && !c.getValue().isEmpty() && c.getRow() > headerRow)
-                .map(Cell::getRow)
-                .collect(Collectors.toMap(Function.identity(), (Integer row) -> teamFromRow(row, teamMap)));
-
-
-        //at the moment we prepared to add a team column to the collected list of cells....
-        //1.
-        Cell headerTeamCell = new Cell(headerRow, firstDayColumn, TEAM_SEARCH_TEXT);
-
-        List<Cell> insertedCells = new ArrayList<>();
-
-        rowsToTeam.entrySet()
-                .stream()
-                .forEach(e -> {
-                    insertedCells.add(new Cell(e.getKey(), firstDayColumn, e.getValue()));
-                });
-
-        List<Cell> header = extractHeader(collected);
-
-        //unpack header on the left and the right side, right side should be shifted to the one position right...
-        //and pack them again in a new header...
+            Map<Integer, String> rowsToTeam = collected.stream()
+                    .filter(c -> c.getColumn() == personnelNumberColumn && !c.getValue().isEmpty() && c.getRow() > headerRow)
+                    .map(Cell::getRow)
+                    .collect(Collectors.toMap(Function.identity(), (Integer row) -> teamFromRow(row, teamMap)));
 
 
-        List<Cell> repackedHeader = Stream.of(
+            //at the moment we prepared to add a team column to the collected list of cells....
+            //1.
+            Cell headerTeamCell = new Cell(headerRow, firstDayColumn, TEAM_SEARCH_TEXT);
+
+            List<Cell> insertedCells = new ArrayList<>();
+
+            rowsToTeam.entrySet()
+                    .stream()
+                    .forEach(e -> {
+                        insertedCells.add(new Cell(e.getKey(), firstDayColumn, e.getValue()));
+                    });
+
+            List<Cell> header = extractHeader(collected);
+
+            //unpack header on the left and the right side, right side should be shifted to the one position right...
+            //and pack them again in a new header...
+
+
+            List<Cell> repackedHeader = Stream.of(
                     header.stream()
-                        .filter(c -> c.getColumn() < firstDayColumn) //left
-                        .collect(Collectors.toList()),
+                            .filter(c -> c.getColumn() < firstDayColumn) //left
+                            .collect(Collectors.toList()),
                     header.stream()
-                        .filter(c -> c.getColumn() >= firstDayColumn) //right
-                        .map(c -> new Cell(c.getRow(), c.getColumn() + 1, c.getValue()))
-                        .collect(Collectors.toList())
-                    ).flatMap(ll -> ll.stream())
-                     .collect(Collectors.toList());
+                            .filter(c -> c.getColumn() >= firstDayColumn) //right
+                            .map(c -> new Cell(c.getRow(), c.getColumn() + 1, c.getValue()))
+                            .collect(Collectors.toList())
+            ).flatMap(ll -> ll.stream())
+                    .collect(Collectors.toList());
 
 
+            List<Cell> leftSideCells = extractLeftExceptOf(collected, header);
 
+            //for the right side and below header cells it needs to shift the column -> column + 1
 
-        List<Cell> leftSideCells = extractLeftExceptOf(collected, header);
+            List<Cell> rightSideAndBelowCells = collected.stream()
+                    .filter(c -> !repackedHeader.contains(c) && !leftSideCells.contains(c) && !c.getValue().isEmpty())
+                    .map(c -> new Cell(c.getRow(), c.getColumn() + 1, c.getValue()))
+                    .collect(Collectors.toList());
 
-        //for the right side and below header cells it needs to shift the column -> column + 1
+            //and then collect header, headerTeamCell, insertedCells, leftSideCells and rigthSideAndBelowCells to
+            //the one collection of cells
 
-        List<Cell> rightSideAndBelowCells = collected.stream()
-                .filter(c -> !repackedHeader.contains(c) && !leftSideCells.contains(c) && !c.getValue().isEmpty())
-                .map(c -> new Cell(c.getRow(), c.getColumn() + 1, c.getValue()))
-                .collect(Collectors.toList());
+            collected.clear();
 
-        //and then collect header, headerTeamCell, insertedCells, leftSideCells and rigthSideAndBelowCells to
-        //the one collection of cells
+            collected.addAll(Stream.of(
+                    repackedHeader,
+                    Arrays.asList(headerTeamCell),
+                    leftSideCells,
+                    insertedCells,
+                    rightSideAndBelowCells
+            ).flatMap(ll -> ll.stream()).collect(Collectors.toList()));
 
-        List<Cell> recollected = Stream.of(
-                            repackedHeader,
-                            Arrays.asList(headerTeamCell),
-                            leftSideCells,
-                            insertedCells,
-                            rightSideAndBelowCells
-                    ).flatMap(ll -> ll.stream()).collect(Collectors.toList());
-
+        }
 
         //2. extract the first header from the collected list
-        List<Cell> packedCells = packedFrom(recollected);
+        List<Cell> packedCells = packedFrom(collected);
 
 
         return packedCells;
@@ -668,21 +643,24 @@ public final class TimeSheetsAppUtils {
 
     private static String teamFromRow(int row, Map<String, Integer> teamMap) {
         return teamMap.entrySet()
-            .stream()
-            .filter(e -> e.getValue() <= row)
-            .sorted(Comparator.comparing(Map.Entry<String,Integer>::getValue).reversed())
-            .map(Map.Entry::getKey)
-            .findFirst()
-            .orElse(NO_TEAM_TEXT);
+                .stream()
+                .filter(e -> e.getValue() <= row)
+                .sorted(Comparator.comparing(Map.Entry<String, Integer>::getValue).reversed())
+                .map(Map.Entry::getKey)
+                .findFirst()
+                .orElse(NO_TEAM_TEXT);
     }
 
     @Value
     @AllArgsConstructor
     static class Cell {
 
-        private final @NonNull int row;
-        private final @NonNull int column;
-        private final @NonNull String value;
+        private final @NonNull
+        int row;
+        private final @NonNull
+        int column;
+        private final @NonNull
+        String value;
 
     }
 
