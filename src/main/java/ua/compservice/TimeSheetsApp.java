@@ -6,6 +6,7 @@ import org.slf4j.LoggerFactory;
 import ua.compservice.config.*;
 import ua.compservice.util.TimeSheetsAppUtils;
 
+import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -34,6 +35,9 @@ public class TimeSheetsApp {
         CheckPersonnelNumberCommand checkPersonnelNumberCommand = new CheckPersonnelNumberCommand();
         CreateNormHoursCommand createNormHoursCommand = new CreateNormHoursCommand();
         HelpCommand helpCommand = new HelpCommand();
+        
+        WriteNormHoursCommand writeNormHoursCommand = new WriteNormHoursCommand();
+        
 
         JCommander commander = JCommander.newBuilder()
                 .addObject(app)
@@ -43,6 +47,7 @@ public class TimeSheetsApp {
                 .addCommand(checkPersonnelNumberCommand)
                 .addCommand(createNormHoursCommand)
                 .addCommand(helpCommand)
+                .addCommand(writeNormHoursCommand)
                 .args(args)
                 .build();
 
@@ -72,7 +77,7 @@ public class TimeSheetsApp {
         } else if ("create-timesheet".equals(parsedCommand)) {
 
             //region Create-timesheet
-            logger.debug("Create-timesheet command {} " + createTimesheetCommand);
+            logger.debug("Create-timesheet command {} ", createTimesheetCommand);
 
             Path homeDir = Paths.get(HOME_DIR);
 
@@ -93,7 +98,7 @@ public class TimeSheetsApp {
 
         } else if ("check-doubles".equals(parsedCommand)) {
             //region Check-doubles
-            logger.debug("check-doubles command {} " + checkDoublesCommand);
+            logger.debug("check-doubles command {} ", checkDoublesCommand);
 
             Path currentDir = Paths.get(HOME_DIR);
             Path file = currentDir.resolve(checkDoublesCommand.getFile());
@@ -111,7 +116,7 @@ public class TimeSheetsApp {
         } else if ("check-personnel-number".equals(parsedCommand)) {
 
             //region Check-personnel-number
-            logger.debug("check-personal-number command {} " + checkPersonnelNumberCommand);
+            logger.debug("check-personal-number command {} ", checkPersonnelNumberCommand);
 
             Path homeDir = Paths.get(HOME_DIR);
 
@@ -130,7 +135,7 @@ public class TimeSheetsApp {
         } else if ("create-norm-hours".equals(parsedCommand)) {
 
             //region Create-norm-hours
-            logger.debug("Create-norm-hours command {} " + createNormHoursCommand);
+            logger.debug("Create-norm-hours command {} ", createNormHoursCommand);
 
             Path homeDir = Paths.get(HOME_DIR);
 
@@ -149,7 +154,25 @@ public class TimeSheetsApp {
 
             //endregion
 
-
+        } else if ("write-norm-hours".equals(parsedCommand)) {
+        	
+        	logger.debug("Write norm hours command {}", writeNormHoursCommand);
+        	
+        	Path homeDir = Paths.get(HOME_DIR);
+        	
+        	Path from = homeDir.resolve(writeNormHoursCommand.getFile());
+        	
+        	if (!Files.exists(from)) {
+        		String message = "Writing norm hours command file: " + from + " does'nt exist";
+        		logger.error("{}", message);
+        		throw new TimeSheetsException(message);
+        	}
+        	
+        	URI uri = URI.create(writeNormHoursCommand.getUrl());
+        	
+        	TimeSheetsAppUtils.writeNormHours(from, uri);
+        	
+            
         } else if ("help".equals(parsedCommand)) {
             commander.usage();
         } else {

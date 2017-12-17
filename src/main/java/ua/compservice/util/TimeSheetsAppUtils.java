@@ -1,8 +1,24 @@
 package ua.compservice.util;
 
-import lombok.AllArgsConstructor;
-import lombok.NonNull;
-import lombok.Value;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.net.URI;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.function.Function;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
 import org.apache.poi.openxml4j.exceptions.InvalidFormatException;
 import org.apache.poi.ss.usermodel.CellType;
 import org.apache.poi.ss.usermodel.Row;
@@ -12,18 +28,17 @@ import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import ua.compservice.TimeSheetsException;
 
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.*;
-import java.util.function.Function;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
+import lombok.AllArgsConstructor;
+import lombok.NonNull;
+import lombok.Value;
+import retrofit2.Call;
+import retrofit2.Response;
+import retrofit2.Retrofit;
+import retrofit2.converter.jackson.JacksonConverterFactory;
+import ua.compservice.TimeSheetsException;
+import ua.compservice.model.Employee;
+import ua.compservice.service.EmployeeService;
 
 public final class TimeSheetsAppUtils {
 
@@ -297,6 +312,85 @@ public final class TimeSheetsAppUtils {
 
     }
 
+    public static void writeNormHours(Path from, URI uri) {
+	
+    	List<Cell> cells = from(from, 0);
+    	
+    	List<Cell> header = extractHeader(cells);
+    	
+    	int headerRow = header.stream()
+    		.mapToInt(Cell::getRow)
+    		.findFirst()
+    		.orElse(NO_VALUE);
+    	
+    	int nameCol = header.stream()
+    			.filter(c -> c.getValue().contains(FIO_SEARCH_TEXT))
+    			.mapToInt(Cell::getColumn)
+    			.findFirst()
+    			.orElse(NO_VALUE);
+    	
+    	int pnCol = header.stream()
+    		.filter(c -> c.getValue().contains(PERSONNEL_NUMBER_SEARCH_TEXT))
+    		.mapToInt(Cell::getColumn)
+    		.findFirst()
+    		.orElse(NO_VALUE);
+    	
+    	int positionCol = header.stream()
+    			.filter(c -> c.getValue().contains(CURRENT_POSITION_SEARCH_TEXT))
+    			.mapToInt(Cell::getColumn)
+    			.findFirst()
+    			.orElse(NO_VALUE);
+    	
+    	//TODO: find first, second and third more explicitly...
+    	
+    	int firstShiftCol = positionCol + 1;
+    	int secondShiftCol = firstShiftCol + 1;
+    	int thirdShiftCol = secondShiftCol + 1;
+    	
+    	
+    	List<Cell> cellsToWrite = cells.stream()
+    		.filter(c -> (c.getRow() > headerRow) && !c.getValue().isEmpty() && !c.getValue().contains(TEAM_SEARCH_TEXT))
+    		.collect(Collectors.toList());
+    	
+    	
+    	Map<Integer, List<Cell>> rows = cellsToWrite.stream()
+    		.collect(Collectors.groupingBy(Cell::getRow));
+    	
+    	
+    	List<Employee> employees = rows.entrySet()
+    		.stream()
+    		.map(e -> new Employee(e.getValue().get(nameCol).getValue(), e.getValue().get(pnCol).getValue(), e.getValue().get(positionCol).getValue()))
+    		.collect(Collectors.toList());
+    	
+    	
+    	//here we have a list of employees try to save it to the database....
+    	Retrofit retrofit = new Retrofit.Builder()
+    		    .baseUrl("http://localhost:9090/")
+    		    .addConverterFactory(JacksonConverterFactory.create())
+    		    .build();
+    		
+    	EmployeeService service = retrofit.create(EmployeeService.class);
+    	
+    	try {
+			Call<Void> saveAll = service.saveAll(employees);
+			
+			Response<Void> response = saveAll.execute();
+			
+			logger.info("An response from a service is {} and body {}", response.code(), response.body());
+			
+		} catch (IOException e1) {
+			logger.error("An error happened at the saving list of employees to rest service {}", e1.getMessage());
+			throw new TimeSheetsException(e1.getMessage());
+		}
+    	
+    	//TODO: write a code for saving norm hours to the rest-service....
+    	
+    	
+    	
+    	
+		
+	}
+    
     static List<Cell> from(Path source, final int rowShift) {
 
         if (!Files.exists(source)) {
@@ -663,6 +757,8 @@ public final class TimeSheetsAppUtils {
         String value;
 
     }
+
+	
 
 }
 
