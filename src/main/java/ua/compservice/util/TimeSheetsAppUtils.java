@@ -22,6 +22,7 @@ import java.util.stream.Stream;
 import org.apache.poi.openxml4j.exceptions.InvalidFormatException;
 import org.apache.poi.ss.usermodel.CellType;
 import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.xssf.usermodel.XSSFCell;
 import org.apache.poi.xssf.usermodel.XSSFRow;
 import org.apache.poi.xssf.usermodel.XSSFSheet;
@@ -392,7 +393,7 @@ public final class TimeSheetsAppUtils {
 	}
     
 
-	public static void mergeSheets(Path from, Path to) {
+	public static void mergeSheets(Path from, Path to, boolean withTeam) {
 		
 		try (XSSFWorkbook workbook = new XSSFWorkbook()) {
 
@@ -400,8 +401,8 @@ public final class TimeSheetsAppUtils {
 
 			//TODO: write merging code at this place...
 			
-			//List<Cell> cells = fromAll(sources, withTeam);
-			//writeTo(sheet, cells, 0);
+			List<Cell> cells = fromAllSheetsOf(from, withTeam);
+			writeTo(sheet, cells, 0);
 
 			try (FileOutputStream fos = new FileOutputStream(to.toFile())) {
 				workbook.write(fos);
@@ -414,7 +415,7 @@ public final class TimeSheetsAppUtils {
 
 	}
     
-    static List<Cell> from(Path source, final int rowShift) {
+   	static List<Cell> from(Path source, final int rowShift) {
 
         if (!Files.exists(source)) {
             String message = String.format("File %s doesn't exist", source.toString());
@@ -758,6 +759,176 @@ public final class TimeSheetsAppUtils {
         return packedCells;
     }
 
+
+   	static List<Cell> withAllSheetsFrom(Path source) {
+
+        if (!Files.exists(source)) {
+            String message = String.format("File %s doesn't exist", source.toString());
+            logger.error("{}", message);
+            throw new TimeSheetsException(message);
+        }
+        
+        final int shiftByDefault = 1;
+        
+        List<Cell> content = new ArrayList<>();
+
+        try {
+            try (XSSFWorkbook workbook = new XSSFWorkbook(source.toFile())) {
+            	
+            	int rowShift = 1;
+            	
+				Iterator<Sheet> sheetIterator = workbook.sheetIterator();
+				
+				List<Cell> collectedFromASheet = new ArrayList<>();
+				
+				while (sheetIterator.hasNext()) {
+					
+					XSSFSheet activeSheet = (XSSFSheet) sheetIterator.next();
+
+					Iterator<Row> rowIterator = activeSheet.iterator();
+
+					while (rowIterator.hasNext()) {
+						Row currentRow = rowIterator.next();
+
+						Iterator<org.apache.poi.ss.usermodel.Cell> cellIterator = currentRow.cellIterator();
+
+						while (cellIterator.hasNext()) {
+							org.apache.poi.ss.usermodel.Cell currentCell = cellIterator.next();
+
+							String aValue = "";
+
+							CellType cellType = currentCell.getCellTypeEnum();
+							if (cellType == CellType.NUMERIC) {
+								aValue = String.valueOf(new Integer((int) currentCell.getNumericCellValue()));
+							} else if (cellType == CellType.STRING) {
+								aValue = currentCell.getStringCellValue();
+							} else {
+								aValue = EMPTY_STRING;
+							}
+
+							collectedFromASheet.add(
+									new Cell(currentRow.getRowNum() + rowShift, currentCell.getColumnIndex(), aValue));
+
+						}
+
+					}
+					
+					//TODO:  calculate row shift here... 
+					 int lastRow = content.stream()
+	                            .map(Cell::getRow)
+	                            .sorted(Comparator.reverseOrder())
+	                            .findFirst()
+	                            .orElse(shiftByDefault);
+					 
+					 rowShift = lastRow + 1;
+					 
+	                 content.addAll(collectedFromASheet);
+					
+					
+				}
+            }
+        } catch (IOException e) {
+            logger.error("{}", e);
+            e.printStackTrace();
+        } catch (InvalidFormatException e) {
+            logger.error("{}", e);
+            e.printStackTrace();
+        }
+
+        return content;
+
+    }
+
+
+    
+    private static List<Cell> fromAllSheetsOf(Path from, boolean withTeam) {
+        
+    	
+
+        final int shiftByDefault = 1;
+
+        //1.collect all cells of all sheets from a path
+        
+        final List<Cell> collected = withAllSheetsFrom(from);
+        
+        if (withTeam) {
+
+            Map<String, Integer> teamMap = collected.stream()
+                    .filter(c -> c.getValue().contains(TEAM_SEARCH_TEXT))
+                    .collect(Collectors.toMap(Cell::getValue, Cell::getRow));
+
+
+            int headerRow = findHeader(collected);
+            int personnelNumberColumn = findPersonnelNumberColumn(collected);
+            int firstDayColumn = findFirstDayColumn(collected, headerRow);
+
+            Map<Integer, String> rowsToTeam = collected.stream()
+                    .filter(c -> c.getColumn() == personnelNumberColumn && !c.getValue().isEmpty() && c.getRow() > headerRow)
+                    .map(Cell::getRow)
+                    .collect(Collectors.toMap(Function.identity(), (Integer row) -> teamFromRow(row, teamMap)));
+
+
+            //at the moment we prepared to add a team column to the collected list of cells....
+            //1.
+            Cell headerTeamCell = new Cell(headerRow, firstDayColumn, TEAM_SEARCH_TEXT);
+
+            List<Cell> insertedCells = new ArrayList<>();
+
+            rowsToTeam.entrySet()
+                    .stream()
+                    .forEach(e -> {
+                        insertedCells.add(new Cell(e.getKey(), firstDayColumn, e.getValue()));
+                    });
+
+            List<Cell> header = extractHeader(collected);
+
+            //unpack header on the left and the right side, right side should be shifted to the one position right...
+            //and pack them again in a new header...
+
+
+            List<Cell> repackedHeader = Stream.of(
+                    header.stream()
+                            .filter(c -> c.getColumn() < firstDayColumn) //left
+                            .collect(Collectors.toList()),
+                    header.stream()
+                            .filter(c -> c.getColumn() >= firstDayColumn) //right
+                            .map(c -> new Cell(c.getRow(), c.getColumn() + 1, c.getValue()))
+                            .collect(Collectors.toList())
+            ).flatMap(ll -> ll.stream())
+                    .collect(Collectors.toList());
+
+
+            List<Cell> leftSideCells = extractLeftExceptOf(collected, header);
+
+            //for the right side and below header cells it needs to shift the column -> column + 1
+
+            List<Cell> rightSideAndBelowCells = collected.stream()
+                    .filter(c -> !repackedHeader.contains(c) && !leftSideCells.contains(c) && !c.getValue().isEmpty())
+                    .map(c -> new Cell(c.getRow(), c.getColumn() + 1, c.getValue()))
+                    .collect(Collectors.toList());
+
+            //and then collect header, headerTeamCell, insertedCells, leftSideCells and rigthSideAndBelowCells to
+            //the one collection of cells
+
+            collected.clear();
+
+            collected.addAll(Stream.of(
+                    repackedHeader,
+                    Arrays.asList(headerTeamCell),
+                    leftSideCells,
+                    insertedCells,
+                    rightSideAndBelowCells
+            ).flatMap(ll -> ll.stream()).collect(Collectors.toList()));
+
+        }
+
+        //2. extract the first header from the collected list
+        List<Cell> packedCells = packedFrom(collected);
+
+        return packedCells;
+
+	}
+    
     private static String teamFromRow(int row, Map<String, Integer> teamMap) {
         return teamMap.entrySet()
                 .stream()

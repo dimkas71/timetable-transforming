@@ -192,7 +192,7 @@ public class TimeSheetsApp {
         	
         	Path to = homeDir.resolve(mergeSheetsCommand.getOutput());
         	
-        	TimeSheetsAppUtils.mergeSheets(from, to);
+        	TimeSheetsAppUtils.mergeSheets(from, to, mergeSheetsCommand.withTeam());
         	
         	
         	//endregion
