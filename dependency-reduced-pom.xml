@@ -4,7 +4,7 @@
   <groupId>ua.compservice</groupId>
   <artifactId>timetable-transforming</artifactId>
   <name>timetable-transforming</name>
-  <version>0.1</version>
+  <version>1.5</version>
   <url>http://maven.apache.org</url>
   <build>
     <plugins>
