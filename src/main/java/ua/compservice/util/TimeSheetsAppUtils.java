@@ -391,6 +391,29 @@ public final class TimeSheetsAppUtils {
 		
 	}
     
+
+	public static void mergeSheets(Path from, Path to) {
+		
+		try (XSSFWorkbook workbook = new XSSFWorkbook()) {
+
+			XSSFSheet sheet = workbook.createSheet("merged-sheets");
+
+			//TODO: write merging code at this place...
+			
+			//List<Cell> cells = fromAll(sources, withTeam);
+			//writeTo(sheet, cells, 0);
+
+			try (FileOutputStream fos = new FileOutputStream(to.toFile())) {
+				workbook.write(fos);
+			}
+
+		} catch (IOException e) {
+			logger.error("{}", e.getMessage());
+			e.printStackTrace();
+		}
+
+	}
+    
     static List<Cell> from(Path source, final int rowShift) {
 
         if (!Files.exists(source)) {
@@ -757,6 +780,7 @@ public final class TimeSheetsAppUtils {
         String value;
 
     }
+
 
 	
 

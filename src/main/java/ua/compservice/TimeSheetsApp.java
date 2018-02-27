@@ -38,6 +38,8 @@ public class TimeSheetsApp {
         
         WriteNormHoursCommand writeNormHoursCommand = new WriteNormHoursCommand();
         
+        MergeSheetsCommand mergeSheetsCommand = new MergeSheetsCommand();
+        
 
         JCommander commander = JCommander.newBuilder()
                 .addObject(app)
@@ -48,6 +50,7 @@ public class TimeSheetsApp {
                 .addCommand(createNormHoursCommand)
                 .addCommand(helpCommand)
                 .addCommand(writeNormHoursCommand)
+                .addCommand(mergeSheetsCommand)
                 .args(args)
                 .build();
 
@@ -171,7 +174,28 @@ public class TimeSheetsApp {
         	URI uri = URI.create(writeNormHoursCommand.getUrl());
         	
         	TimeSheetsAppUtils.writeNormHours(from, uri);
+        } else if ("merge-sheets".equals(parsedCommand)) {
         	
+        	
+        	//region Merge-sheets
+        	logger.debug("Merge-sheets command{}", mergeSheetsCommand);
+        	
+        	Path homeDir = Paths.get(HOME_DIR);
+        	
+        	Path from = homeDir.resolve(mergeSheetsCommand.getInput());
+        	
+        	if (!Files.exists(from)) {
+        		String message = "Writing sheets command file: " + from + " does'nt exist";
+        		logger.error("{}", message);
+        		throw new TimeSheetsException(message);
+        	}
+        	
+        	Path to = homeDir.resolve(mergeSheetsCommand.getOutput());
+        	
+        	TimeSheetsAppUtils.mergeSheets(from, to);
+        	
+        	
+        	//endregion
             
         } else if ("help".equals(parsedCommand)) {
             commander.usage();
