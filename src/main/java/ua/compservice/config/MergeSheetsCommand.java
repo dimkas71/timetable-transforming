@@ -14,8 +14,8 @@ public class MergeSheetsCommand {
 	@Parameter(names = {"-f", "--file"}, description = "input file", required = true)
 	private String input;
 	
-	@Parameter(names = { "-with-team" }, description = "if used then column TEAM will be "
-			+ "inserted before the first timesheet's day(1)", required = false)
+	@Parameter(names = { "-wt", "--with-team" }, description = "if used then column TEAM will be "
+			+ "inserted before the first timesheet's day(1). The team name will get from a sheet's name", required = false)
 	@Getter(AccessLevel.NONE)
 	private boolean withTeam;
 
