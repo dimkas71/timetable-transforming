@@ -5,8 +5,12 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Objects;
+
+import javax.security.sasl.SaslException;
 
 import org.apache.poi.openxml4j.exceptions.InvalidFormatException;
 import org.apache.poi.ss.usermodel.CellType;
@@ -17,6 +21,8 @@ import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import ua.compservice.util.TimeSheetsAppUtils;
 
 public class SheetContainer {
 
@@ -110,22 +116,25 @@ public class SheetContainer {
 			int nextRow = 0;
 			for (Sheet s : sheets) {
 
-				for (int r = 0; r < s.cells.length; r++, nextRow++) {
+				String[][] sheetCells = withTeam ? s.withTeam() : s.cells;
+				
+				
+				for (int r = 0; r < sheetCells.length; r++, nextRow++) {
 
 					XSSFRow row = sheet.getRow(nextRow);
 					if (row == null) {
 						row = sheet.createRow(nextRow);
 					}
 
-					if (s.cells[r] != null) { // TODO: exclude writing null to the container... can be null
-						for (int c = 0; c < s.cells[r].length; c++) {
+					if (sheetCells[r] != null) { // TODO: exclude writing null to the container... can be null
+						for (int c = 0; c < sheetCells[r].length; c++) {
 
 							XSSFCell cell = row.getCell(c);
 							if (cell == null) {
 								cell = row.createCell(c, CellType.STRING);
 							}
 
-							cell.setCellValue(s.cells[r][c]);
+							cell.setCellValue(sheetCells[r][c]);
 						}
 					}
 				}
@@ -143,7 +152,9 @@ public class SheetContainer {
 	}
 
 	static class Sheet {
-
+		
+		private static final int NO_VALUE = -1;
+		
 		private String name;
 		private String[][] cells;
 
@@ -152,6 +163,182 @@ public class SheetContainer {
 			this.cells = cells;
 		}
 
+		public String[][] withTeam() {
+			
+			int headerRow = headerRow(); //potentially throws NullPointerException
+			
+			if (headerRow == NO_VALUE) {
+				String message = "Header row does'nt matched in the sheet " + name;
+				logger.error(message);
+				throw new SheetException(message);
+			}
+			
+			
+			int fdColumnIndex = firstDayColumnIndex(); //potentially throws NullPointerException
+			
+			if (fdColumnIndex == NO_VALUE) {
+				String message = "First day column not found in the sheet " + name;
+				logger.error(message);
+				throw new SheetException(message);
+			}
+			
+			int[] contentRows = getFirstLastContentRows(); //potentially throws NullPointerException
+			
+			int first = contentRows[0];
+			int last = contentRows[1];
+			
+			if (first == NO_VALUE || last == NO_VALUE) {
+				String message = "Personnell numbers aren't matched in the sheet " + name;
+				logger.error(message);
+				throw new SheetException(message);
+			}
+				
+			String[][] newCells = new String[cells.length][];
+			
+			for (int r = 0; r < cells.length; r++) {
+				if (cells[r] == null) continue;
+				if (r == headerRow) {
+					newCells[r] = new String[cells[r].length + 1];
+					for (int c = 0; c < newCells[r].length; c++) {
+						if (c < fdColumnIndex) {
+							newCells[r][c] = cells[r][c];
+						} else if (c == fdColumnIndex) {
+							newCells[r][c] = name;
+						} else {
+							newCells[r][c] = cells[r][c - 1];
+						}
+					}
+				} else if ( r >= first && r <= last) {
+					newCells[r] = new String[cells[r].length + 1];
+					for (int c = 0; c < newCells[r].length; c++) {
+						if (c < fdColumnIndex) {
+							newCells[r][c] = cells[r][c];
+						} else if (c == fdColumnIndex) {
+							newCells[r][c] = name;
+						} else {
+							newCells[r][c] = cells[r][c - 1];
+						}
+					}
+				} else {
+					newCells[r] = new String[cells[r].length];
+					for (int c = 0; c < cells[r].length; c++) {
+						newCells[r][c] = cells[r][c];
+					}
+				}
+			}
+			return newCells;
+		}
+		
+		private int headerRow() {
+			
+			Objects.requireNonNull(cells);
+			
+			int headerRow = NO_VALUE;
+			
+			for (int r = 0; r < cells.length; r++) {
+				
+				if (cells[r] == null) continue;
+				
+				for (int c = 0; c < cells[r].length; c++) {
+					
+					if (cells[r][c] == null) continue;
+					
+					if (TimeSheetsAppUtils.matches(cells[r][c])) {
+						headerRow = r - 1;
+						return headerRow; 
+					}
+				}
+			}
+			return headerRow;
+		}
+
+		private int firstDayColumnIndex() {
+			
+			Objects.requireNonNull(cells);
+			
+			int firstDayColumnIndex = NO_VALUE;
+			int headerRow = headerRow();
+			
+			if (headerRow != NO_VALUE) {
+				for (int c = 0; c < cells[headerRow].length; c++) {
+					if (cells[headerRow][c] == null) continue;
+					if (TimeSheetsAppUtils.hasDigit(cells[headerRow][c])) {
+						firstDayColumnIndex = c;
+						break;
+					}
+				}
+			}
+			
+			
+			return firstDayColumnIndex;
+		}
+		
+		private int personnelNumberColumnIndex() {
+			
+			Objects.requireNonNull(cells);
+			
+			int pnColumnIndex = NO_VALUE;
+			
+			for (int r = 0; r < cells.length; r++) {
+				
+				if (cells[r] == null) continue;
+				
+				for (int c = 0; c < cells[r].length; c++) {
+					if (cells[r][c] == null) continue;
+					if (TimeSheetsAppUtils.matches(cells[r][c])) {
+						pnColumnIndex = c;
+						return pnColumnIndex; 
+					}
+				}
+			}
+			return pnColumnIndex;
+			
+		}
+		
+		private int[] getFirstLastContentRows() {
+			
+			Objects.requireNonNull(cells);
+			
+			int first = NO_VALUE;
+			int last = NO_VALUE;
+			
+			int pnColumnIndex = personnelNumberColumnIndex();
+			boolean isFirst = false;
+			if (pnColumnIndex != NO_VALUE) {
+				for (int r = 0; r < cells.length; r++) {
+					if (cells[r] == null) continue;
+					
+					if ((cells[r].length <= pnColumnIndex ) || (cells[r][pnColumnIndex] == null)) continue;
+					
+					boolean pnMatched = TimeSheetsAppUtils.matches(cells[r][pnColumnIndex]);
+					
+					if (!isFirst && pnMatched) {
+						first = r;
+						isFirst = true;
+						
+					} else if (pnMatched) {
+						last = r;
+					}
+				}
+					
+			}
+			
+			
+			return new int[] {first, last};
+		}
+		
+
 	}
 
+	static class SheetException extends RuntimeException {
+		public SheetException() {
+			super();
+		}
+		
+		public SheetException(String message) {
+			super(message);
+		}
+		
+	}
+	
 }
