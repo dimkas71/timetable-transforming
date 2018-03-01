@@ -57,6 +57,8 @@ public class SheetContainer {
 
 					XSSFSheet activeSheet = (XSSFSheet) sheetIterator.next();
 
+					if (workbook.isSheetHidden(workbook.getSheetIndex(activeSheet))) continue;
+					
 					String sheetName = activeSheet.getSheetName();
 
 					String[][] sheetCells = new String[activeSheet.getLastRowNum() + 1][];
@@ -320,17 +322,14 @@ public class SheetContainer {
 						last = r;
 					}
 				}
-					
 			}
-			
-			
 			return new int[] {first, last};
 		}
-		
-
+	
 	}
 
 	static class SheetException extends RuntimeException {
+		
 		public SheetException() {
 			super();
 		}
