@@ -60,7 +60,7 @@ public final class TimeSheetsAppUtils {
     static final String EMPTY_STRING = "";
 
     static final String TIME_REGEX_EXPRESSION
-            = "(?<hours>\\d{1})\\/(?<workshift>\\d{1})\\((?<hoursminutes>\\d{1}:\\d{2})\\)";
+            = "(?<hours>\\d{1})\\/(?<workshift>\\d{1})\\((?<hoursminutes>\\d{1,}:\\d{2})\\)";
 
     static final String DIGIT_FIND_REGEX_EXPRESSION = "\\d{1,}";
     //endregion
